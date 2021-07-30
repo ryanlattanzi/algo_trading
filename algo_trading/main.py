@@ -16,7 +16,7 @@ new_ticker_list = db.check_new_tickers()
 
 #This for loop checks to see if a new ticker was added to the config.yml file
 for ticker in new_ticker_list:
-    stock_init = StockData(ticker, '01-01-2021', '07-28-2021', '1d')
+    stock_init = StockData(ticker, 'max', '07-28-2021', '1d')
     query_string = stock_init.create_query_string()
     stock_data = stock_init.get_stock_data()
     stock_data_dict[ticker] = stock_data
