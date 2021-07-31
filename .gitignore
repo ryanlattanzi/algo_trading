@@ -4,6 +4,7 @@
 /mnt/
 *.drawio
 /token/
+.vscode/
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
