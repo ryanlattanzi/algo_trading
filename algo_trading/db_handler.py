@@ -29,6 +29,10 @@ class PostgresHandler:
         print(f"Adding {len(df)} rows to {ticker}.")
         df.to_sql(ticker, con=self.db_engine, if_exists="append", index=False)
 
+    # TODO: Function will look at database and see what last entry date is
+    def get_most_recent_date(db_conn, ticker: str) -> str:
+        pass
+
     def _initialize_db_connection(self) -> None:
         user = self.db_info.get("user")
         password = self.db_info.get("password")

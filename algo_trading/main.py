@@ -106,6 +106,10 @@ def backfill_new_tickers(db, new_ticker_data):
         db.add_hist_data(ticker, df)
 
 
+def backfill_existing_tickers():
+    pass
+
+
 if __name__ == "__main__":
     db, new_tickers = create_new_tables()
     new_ticker_data = get_new_ticker_data(new_tickers)

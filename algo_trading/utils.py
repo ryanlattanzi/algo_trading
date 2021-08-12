@@ -11,11 +11,6 @@ def clean_df(df: pd.DataFrame) -> pd.DataFrame:
     return df
 
 
-# TODO: Function will look at database and see what last entry date is
-def get_most_recent_date(db_conn, ticker: str) -> str:
-    pass
-
-
 def clean_headers(df: pd.DataFrame) -> pd.DataFrame:
     df.columns = snake_case(list(df.columns))
     return df
