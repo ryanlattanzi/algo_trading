@@ -105,12 +105,33 @@ def backfill_new_tickers(db, new_ticker_data):
     for ticker, df in new_ticker_data.items():
         db.add_hist_data(ticker, df)
 
+# TODO: Function will create a dictionary with ticker as the key and pd.dataframe as the keys.
+# The dataframe date will start with the last date entry and end on the current day
+def get_updated_ticker_data():
+    updated_ticker_data = dict()
+    data_handler = get_data_handler(DATA_HANDLER)
+    db_handler = get_db_handler(DB_HANDLER)
 
-def backfill_existing_tickers():
-    pass
+    for ticker in TICKERS:
+        last_date_entry = db_handler.get_most_recent_date(ticker)
+        current_date = date.today().strftime("%m-%d-%Y")
+        interval = "1d"
+        stock_df = data_handler.get_stock_data(ticker, last_date_entry, current_date, interval)
+        stock_df = clean_df(stock_df)
+        updated_ticker_data[ticker] = stock_df
+
+    return updated_ticker_data
+
+# TODO: Function will append updated ticker data to existing tables in database
+def append_updated_ticker_data(updated_ticker_data):
+    db_handler = get_db_handler(DB_HANDLER)
+    for ticker, df in updated_ticker_data.items():
+        db_handler.add_new_data(ticker, df)
 
 
 if __name__ == "__main__":
     db, new_tickers = create_new_tables()
     new_ticker_data = get_new_ticker_data(new_tickers)
+    updated_ticker_data = get_updated_ticker_data()
     backfill_new_tickers(db, new_ticker_data)
+    append_updated_ticker_data(updated_ticker_data)

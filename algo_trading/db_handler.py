@@ -29,9 +29,15 @@ class PostgresHandler:
         print(f"Adding {len(df)} rows to {ticker}.")
         df.to_sql(ticker, con=self.db_engine, if_exists="append", index=False)
 
+    # TODO: Function will append up to date data to existing tables
+    def add_new_data(self, ticker: str, df: pd.DataFrame) -> None:
+        df.to_sql(ticker, con=self.db_engine, if_exists="append", index=False)
+
     # TODO: Function will look at database and see what last entry date is
-    def get_most_recent_date(db_conn, ticker: str) -> str:
-        pass
+    def get_most_recent_date(self, ticker: str) -> str:
+        query_line = f"""SELECT DATE FROM {ticker} WHERE id=(SELECT max(id) FROM {ticker})"""
+        last_entry_date = self.db_engine.execute(query_line)
+        return last_entry_date
 
     def _initialize_db_connection(self) -> None:
         user = self.db_info.get("user")
