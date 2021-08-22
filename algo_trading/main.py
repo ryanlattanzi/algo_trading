@@ -5,9 +5,9 @@ from typing import Dict, List, Tuple, Union
 import yaml as yl
 from dotenv import load_dotenv
 
-from db_handler import *
-from data_handler import *
-from utils import *
+from data_handler import get_data_handler
+from db_handler import get_db_handler
+from utils import clean_df
 
 load_dotenv("../local.env")
 
@@ -105,6 +105,7 @@ def backfill_new_tickers(db, new_ticker_data):
     for ticker, df in new_ticker_data.items():
         db.add_hist_data(ticker, df)
 
+
 # TODO: Function will create a dictionary with ticker as the key and pd.dataframe as the keys.
 # The dataframe date will start with the last date entry and end on the current day
 def get_updated_ticker_data():
@@ -116,11 +117,14 @@ def get_updated_ticker_data():
         last_date_entry = db_handler.get_most_recent_date(ticker)
         current_date = date.today().strftime("%m-%d-%Y")
         interval = "1d"
-        stock_df = data_handler.get_stock_data(ticker, last_date_entry, current_date, interval)
+        stock_df = data_handler.get_stock_data(
+            ticker, last_date_entry, current_date, interval
+        )
         stock_df = clean_df(stock_df)
         updated_ticker_data[ticker] = stock_df
 
     return updated_ticker_data
+
 
 # TODO: Function will append updated ticker data to existing tables in database
 def append_updated_ticker_data(updated_ticker_data):
