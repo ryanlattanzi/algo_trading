@@ -2,7 +2,7 @@ from typing import List
 
 import pandas as pd
 
-import schemas
+from schemas import DFColumns
 
 
 def clean_df(df: pd.DataFrame) -> pd.DataFrame:
@@ -18,7 +18,7 @@ def clean_headers(df: pd.DataFrame) -> pd.DataFrame:
 
 
 def validate_columns(df: pd.DataFrame) -> pd.DataFrame:
-    if not list(df.columns) == list(schemas.DFColumns.columns.keys()):
+    if not list(df.columns) == DFColumns.columns():
         raise ValueError("DF Columns do not adhere to the schema.")
     return df
 

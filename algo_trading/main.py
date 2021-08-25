@@ -1,6 +1,7 @@
 import os
 from datetime import date, datetime, timedelta
 from typing import Dict, List
+import pandas as pd
 
 import yaml as yl
 from dotenv import load_dotenv
@@ -8,6 +9,7 @@ from dotenv import load_dotenv
 from data_handler import get_data_handler
 from db_handler import get_db_handler
 from utils import clean_df
+from schemas import DFColumns, DBColumns
 
 load_dotenv("../local.env")
 
@@ -66,7 +68,7 @@ def create_new_tables() -> List:
     return new_tickers
 
 
-def get_new_ticker_data(new_tickers: List) -> Dict:
+def get_new_ticker_data(new_tickers: List, rolling_col: str) -> Dict:
     """
     Gets historical data for the list of new tickers found.
     Does not put into the DB, but keeps it in memory for the
@@ -87,6 +89,12 @@ def get_new_ticker_data(new_tickers: List) -> Dict:
             ticker, "max", date.today().strftime(DATE_FORMAT), "1d"
         )
         stock_df = clean_df(stock_df)
+        stock_df = stock_df.sort_values(["date"], ascending=True)
+
+        # Calculating SMAs
+        for col, val in DBColumns.calculations().items():
+            stock_df[col] = stock_df[rolling_col].rolling(val).mean()
+
         new_ticker_data[ticker] = stock_df
     return new_ticker_data
 
@@ -106,7 +114,7 @@ def add_new_ticker_data(new_ticker_data: Dict) -> None:
         db_handler.df_to_sql(ticker, df)
 
 
-def get_existing_ticker_data(new_tickers: List) -> Dict:
+def get_existing_ticker_data(new_tickers: List, rolling_col: str) -> Dict:
     """
     Gets data for the list of existing tickers. The DF date will
     start with the day after the last date entry (inclusive) and end
@@ -129,7 +137,7 @@ def get_existing_ticker_data(new_tickers: List) -> Dict:
     for ticker in [t for t in TICKERS if t not in new_tickers]:
         last_date_entry = db_handler.get_most_recent_date(ticker)
 
-        query_date = datetime.strptime(last_date_entry, DATE_FORMAT) + timedelta(days=1)
+        query_date = last_date_entry + timedelta(days=1)
         query_date_str = query_date.strftime(DATE_FORMAT)
 
         end_date = date.today()
@@ -143,13 +151,33 @@ def get_existing_ticker_data(new_tickers: List) -> Dict:
             )
             if stock_df is not None:
                 stock_df = clean_df(stock_df)
+                stock_df = stock_df.sort_values(["date"], ascending=True)
+
                 # One-off error found when the API returns data for a weekend
-                if datetime.strptime(stock_df["date"][0], DATE_FORMAT) >= query_date:
+                if datetime.strptime(stock_df["date"][0], DATE_FORMAT) >= datetime(
+                    query_date.year, query_date.month, query_date.day
+                ):
                     print(
                         f"adding {ticker} data for dates "
                         + f"{stock_df['date'].iloc[0]} -> {stock_df['date'].iloc[-1]}"
                     )
-                    updated_ticker_data[ticker] = stock_df
+
+                    # Getting rows 199 days back from the earliest row of the DF
+                    condition = f"ORDER BY date DESC LIMIT 199"
+                    hist_df = db_handler.get_data(ticker, condition)
+                    hist_df = hist_df.sort_values(["date"], ascending=True)
+                    full_df = pd.concat([hist_df, stock_df], axis=0).reset_index(
+                        drop=True
+                    )
+
+                    # Calculating SMAs after
+                    for col, val in DBColumns.calculations().items():
+                        full_df[col] = full_df[rolling_col].rolling(val).mean()
+
+                    # Only getting the new rows to upload to the DB
+                    full_df["date"] = pd.to_datetime(full_df["date"])
+                    mask = full_df["date"] >= stock_df["date"][0]
+                    updated_ticker_data[ticker] = full_df.loc[mask]
         else:
             print(f"{end_date_str} is a weekend! No run run today boo boo...")
     return updated_ticker_data
@@ -170,8 +198,8 @@ def add_existing_ticker_data(existing_ticker_data: Dict) -> None:
 
 if __name__ == "__main__":
     new_tickers = create_new_tables()
-    new_ticker_data = get_new_ticker_data(new_tickers)
+    new_ticker_data = get_new_ticker_data(new_tickers, "close")
     add_new_ticker_data(new_ticker_data)
 
-    existing_ticker_data = get_existing_ticker_data(new_tickers)
+    existing_ticker_data = get_existing_ticker_data(new_tickers, "close")
     add_existing_ticker_data(existing_ticker_data)
