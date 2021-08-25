@@ -1,13 +1,13 @@
 import os
-from datetime import date
-from typing import Dict, List, Tuple, Union
+from datetime import date, datetime, timedelta
+from typing import Dict, List
 
 import yaml as yl
 from dotenv import load_dotenv
 
-from db_handler import *
-from data_handler import *
-from utils import *
+from data_handler import get_data_handler
+from db_handler import get_db_handler
+from utils import clean_df
 
 load_dotenv("../local.env")
 
@@ -27,7 +27,6 @@ Similarly, we can do the same for stock_data for wherever we pull data (Yahoo, B
 
 TODO: Write a testing framework that interacts with the dev db
 TODO: Create a Logging mechanism
-TODO: FOR CHRIS - Finish function in utils.py
 """
 
 # Loading in DB info
@@ -50,23 +49,24 @@ DB_INFO = {
     "password": PASSWORD,
     "port": "5432",
 }
+DATE_FORMAT = "%Y-%m-%d"
 
 
-def create_new_tables():
+def create_new_tables() -> List:
     """
     Initializes the config DBInterface instance and creates new tables
     based off of new tickers that popped up in the configuration.
 
     Returns:
-        Tuple[DBInterface, List]: DBInterface object and list of new tickers
+        List: List of new tickers
     """
-    handler = get_db_handler(DB_HANDLER)
-    db = handler(TICKERS, DB_INFO)
-    new_tickers = db.create_new_ticker_tables()
-    return db, new_tickers
+    db_handler = get_db_handler(DB_HANDLER, TICKERS, DB_INFO)
+
+    new_tickers = db_handler.create_new_ticker_tables()
+    return new_tickers
 
 
-def get_new_ticker_data(new_tickers):
+def get_new_ticker_data(new_tickers: List) -> Dict:
     """
     Gets historical data for the list of new tickers found.
     Does not put into the DB, but keeps it in memory for the
@@ -81,57 +81,97 @@ def get_new_ticker_data(new_tickers):
     """
     new_ticker_data = dict()
     data_handler = get_data_handler(DATA_HANDLER)
+
     for ticker in new_tickers:
         stock_df = data_handler.get_stock_data(
-            ticker, "max", date.today().strftime("%m-%d-%Y"), "1d"
+            ticker, "max", date.today().strftime(DATE_FORMAT), "1d"
         )
         stock_df = clean_df(stock_df)
-        # print(stock_df.columns)
-        # print(clean_df)
         new_ticker_data[ticker] = stock_df
     return new_ticker_data
 
 
-def backfill_new_tickers(db, new_ticker_data):
+def add_new_ticker_data(new_ticker_data: Dict) -> None:
     """
     Slaps the historical data from pd.DataFrame into the DB.
     For now, this is meant to run for new tickers, since it will
     load the entire DF into the table.
 
     Args:
-        db (DBInterface): Connector to the DB
         new_ticker_data (Dict): New data to be loaded to the DB
     """
+    db_handler = get_db_handler(DB_HANDLER, TICKERS, DB_INFO)
+
     for ticker, df in new_ticker_data.items():
-        db.add_hist_data(ticker, df)
+        db_handler.df_to_sql(ticker, df)
 
-# TODO: Function will create a dictionary with ticker as the key and pd.dataframe as the keys.
-# The dataframe date will start with the last date entry and end on the current day
-def get_updated_ticker_data():
+
+def get_existing_ticker_data(new_tickers: List) -> Dict:
+    """
+    Gets data for the list of existing tickers. The DF date will
+    start with the day after the last date entry (inclusive) and end
+    on the current day (exclusive).
+
+    Does not put into the DB, but keeps it in memory for the
+    next task. We could think about persisting this data to
+    disk or to AWS or something.
+
+    Args:
+        new_tickers (List): New tickers to exclude from pulling data
+
+    Returns:
+        Dict: Existing data with key: ticker, val: pd.DataFrame
+    """
     updated_ticker_data = dict()
+    db_handler = get_db_handler(DB_HANDLER, TICKERS, DB_INFO)
     data_handler = get_data_handler(DATA_HANDLER)
-    db_handler = get_db_handler(DB_HANDLER)
 
-    for ticker in TICKERS:
+    for ticker in [t for t in TICKERS if t not in new_tickers]:
         last_date_entry = db_handler.get_most_recent_date(ticker)
-        current_date = date.today().strftime("%m-%d-%Y")
-        interval = "1d"
-        stock_df = data_handler.get_stock_data(ticker, last_date_entry, current_date, interval)
-        stock_df = clean_df(stock_df)
-        updated_ticker_data[ticker] = stock_df
 
+        query_date = datetime.strptime(last_date_entry, DATE_FORMAT) + timedelta(days=1)
+        query_date_str = query_date.strftime(DATE_FORMAT)
+
+        end_date = date.today()
+        end_date_str = end_date.strftime(DATE_FORMAT)
+
+        print(f"last date entry for {ticker}: {last_date_entry}")
+        print(f"pulling {ticker} from {query_date_str} to {end_date_str}")
+        if not end_date.weekday() in [5, 6]:
+            stock_df = data_handler.get_stock_data(
+                ticker, query_date_str, end_date_str, "1d"
+            )
+            if stock_df is not None:
+                stock_df = clean_df(stock_df)
+                # One-off error found when the API returns data for a weekend
+                if datetime.strptime(stock_df["date"][0], DATE_FORMAT) >= query_date:
+                    print(
+                        f"adding {ticker} data for dates "
+                        + f"{stock_df['date'].iloc[0]} -> {stock_df['date'].iloc[-1]}"
+                    )
+                    updated_ticker_data[ticker] = stock_df
+        else:
+            print(f"{end_date_str} is a weekend! No run run today boo boo...")
     return updated_ticker_data
 
-# TODO: Function will append updated ticker data to existing tables in database
-def append_updated_ticker_data(updated_ticker_data):
-    db_handler = get_db_handler(DB_HANDLER)
-    for ticker, df in updated_ticker_data.items():
-        db_handler.add_new_data(ticker, df)
+
+def add_existing_ticker_data(existing_ticker_data: Dict) -> None:
+    """
+    Append updated ticker data to existing tables in the DB.
+
+    Args:
+        existing_ticker_data (Dict): Data to be loaded to the DB
+    """
+    db_handler = get_db_handler(DB_HANDLER, TICKERS, DB_INFO)
+
+    for ticker, df in existing_ticker_data.items():
+        db_handler.df_to_sql(ticker, df)
 
 
 if __name__ == "__main__":
-    db, new_tickers = create_new_tables()
+    new_tickers = create_new_tables()
     new_ticker_data = get_new_ticker_data(new_tickers)
-    updated_ticker_data = get_updated_ticker_data()
-    backfill_new_tickers(db, new_ticker_data)
-    append_updated_ticker_data(updated_ticker_data)
+    add_new_ticker_data(new_ticker_data)
+
+    existing_ticker_data = get_existing_ticker_data(new_tickers)
+    add_existing_ticker_data(existing_ticker_data)
