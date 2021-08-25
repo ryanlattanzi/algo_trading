@@ -1,9 +1,7 @@
-import datetime
 from typing import Dict, List, Union
 
 import pandas as pd
 import sqlalchemy as sa
-import yaml as yl
 
 import schemas
 
@@ -25,19 +23,16 @@ class PostgresHandler:
             self._create_table(ticker)
         return new_tickers
 
-    def add_hist_data(self, ticker: str, df: pd.DataFrame) -> None:
+    def df_to_sql(self, ticker: str, df: pd.DataFrame) -> None:
         print(f"Adding {len(df)} rows to {ticker}.")
         df.to_sql(ticker, con=self.db_engine, if_exists="append", index=False)
 
-    # TODO: Function will append up to date data to existing tables
-    def add_new_data(self, ticker: str, df: pd.DataFrame) -> None:
-        df.to_sql(ticker, con=self.db_engine, if_exists="append", index=False)
-
-    # TODO: Function will look at database and see what last entry date is
     def get_most_recent_date(self, ticker: str) -> str:
-        query_line = f"""SELECT DATE FROM {ticker} WHERE id=(SELECT max(id) FROM {ticker})"""
-        last_entry_date = self.db_engine.execute(query_line)
-        return last_entry_date
+        query_line = f"""SELECT date from {ticker} order by date desc limit 1"""
+        with self.db_engine.connect() as connection:
+            last_entry_date = connection.execute(query_line)
+        # need to find a better way to parse query results
+        return [item[0] for item in last_entry_date][0]
 
     def _initialize_db_connection(self) -> None:
         user = self.db_info.get("user")
@@ -63,6 +58,8 @@ class PostgresHandler:
         return list(set(self.ticker_list) - set(current_tickers))
 
 
-def get_db_handler(handler: str) -> Union[PostgresHandler]:
+def get_db_handler(
+    handler: str, ticker_list: List, db_info: Dict
+) -> Union[PostgresHandler]:
     if handler == "postgres":
-        return PostgresHandler
+        return PostgresHandler(ticker_list, db_info)
