@@ -3,7 +3,7 @@ from typing import Dict, List, Union
 import pandas as pd
 import sqlalchemy as sa
 
-import schemas
+from schemas import DBColumns
 
 
 class PostgresHandler:
@@ -28,11 +28,15 @@ class PostgresHandler:
         df.to_sql(ticker, con=self.db_engine, if_exists="append", index=False)
 
     def get_most_recent_date(self, ticker: str) -> str:
-        query_line = f"""SELECT date from {ticker} order by date desc limit 1"""
+        query_line = f"""SELECT DATE FROM {ticker} ORDER BY DATE DESC LIMIT 1"""
         with self.db_engine.connect() as connection:
             last_entry_date = connection.execute(query_line)
         # need to find a better way to parse query results
         return [item[0] for item in last_entry_date][0]
+
+    def get_data(self, ticker: str, condition: str = "") -> pd.DataFrame:
+        query = f"SELECT * FROM {ticker} {condition}".strip()
+        return pd.read_sql(query, con=self.db_engine)
 
     def _initialize_db_connection(self) -> None:
         user = self.db_info.get("user")
@@ -46,13 +50,14 @@ class PostgresHandler:
         )
 
     def _create_table(self, ticker: str) -> None:
-        col_str = ", ".join([f"{k} {v}" for k, v in schemas.DFColumns.columns.items()])
+        print(f"Creating table {ticker}")
+        col_str = ", ".join([f"{k} {v}" for k, v in DBColumns.columns().items()])
         self.db_engine.execute(f"""CREATE TABLE IF NOT EXISTS {ticker} ({col_str})""")
 
     def _get_new_tickers(self) -> List:
         with self.db_engine.connect() as conn:
             res = conn.execute(
-                """SELECT table_name FROM information_schema.tables WHERE table_schema = 'public'"""
+                """SELECT TABLE_NAME FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_SCHEMA = 'public'"""
             )
             current_tickers = [item[0] for item in res]
         return list(set(self.ticker_list) - set(current_tickers))
