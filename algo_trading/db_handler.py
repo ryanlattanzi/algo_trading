@@ -3,7 +3,7 @@ from typing import Dict, List, Union
 import pandas as pd
 import sqlalchemy as sa
 
-from schemas import DBColumns
+from controllers import ColumnController
 
 
 class PostgresHandler:
@@ -51,7 +51,9 @@ class PostgresHandler:
 
     def _create_table(self, ticker: str) -> None:
         print(f"Creating table {ticker}")
-        col_str = ", ".join([f"{k} {v}" for k, v in DBColumns.columns().items()])
+        col_str = ", ".join(
+            [f"{k} {v}" for k, v in ColumnController.db_columns().items()]
+        )
         self.db_engine.execute(f"""CREATE TABLE IF NOT EXISTS {ticker} ({col_str})""")
 
     def _get_new_tickers(self) -> List:
