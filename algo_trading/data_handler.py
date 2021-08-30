@@ -1,6 +1,7 @@
 import time
+import sys
 from typing import Union
-from urllib.error import URLError, HTTPError
+from urllib.error import HTTPError
 
 import pandas as pd
 from dateutil.parser import parse
@@ -19,12 +20,11 @@ class YahooFinanceDataHandler:
             hist_data = pd.read_csv(
                 self._create_query_string(symbol, start_date, end_date, interval)
             )
-        except (HTTPError):
-            print(
+            return hist_data
+        except HTTPError:
+            sys.exit(
                 f"\nCannot pull data for {symbol} for dates: {start_date} to {end_date}.\n"
             )
-            hist_data = None
-        return hist_data
 
     def _create_query_string(
         self, symbol: str, start_date: str, end_date: str, interval: str

@@ -2,7 +2,7 @@ from typing import List
 
 import pandas as pd
 
-from schemas import DFColumns
+from controllers import ColumnController
 
 
 def clean_df(df: pd.DataFrame) -> pd.DataFrame:
@@ -18,13 +18,13 @@ def clean_headers(df: pd.DataFrame) -> pd.DataFrame:
 
 
 def validate_columns(df: pd.DataFrame) -> pd.DataFrame:
-    if not list(df.columns) == DFColumns.columns():
+    if not list(df.columns) == ColumnController.df_columns():
         raise ValueError("DF Columns do not adhere to the schema.")
     return df
 
 
 def dedupe_by_date(df: pd.DataFrame) -> pd.DataFrame:
-    return df.drop_duplicates(subset=["date"])
+    return df.drop_duplicates(subset=[ColumnController.date.value])
 
 
 def snake_case(cols: List) -> List:
