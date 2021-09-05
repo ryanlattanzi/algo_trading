@@ -2,29 +2,7 @@ from enum import Enum
 from typing import List, Dict
 
 
-class DFColumns(Enum):
-    date = "date"
-    open = "open"
-    high = "high"
-    low = "low"
-    close = "close"
-    adj_close = "adj_close"
-    volume = "volume"
-
-    @classmethod
-    def columns(cls) -> List[str]:
-        return [
-            cls.date.value,
-            cls.open.value,
-            cls.high.value,
-            cls.low.value,
-            cls.close.value,
-            cls.adj_close.value,
-            cls.volume.value,
-        ]
-
-
-class DBColumns(Enum):
+class ColumnController(Enum):
     date = "date"
     open = "open"
     high = "high"
@@ -38,7 +16,19 @@ class DBColumns(Enum):
     ma_7 = "ma_7"
 
     @classmethod
-    def columns(cls) -> Dict:
+    def df_columns(cls) -> List[str]:
+        return [
+            cls.date.value,
+            cls.open.value,
+            cls.high.value,
+            cls.low.value,
+            cls.close.value,
+            cls.adj_close.value,
+            cls.volume.value,
+        ]
+
+    @classmethod
+    def db_columns(cls) -> Dict:
         return {
             cls.date.value: "DATE",
             cls.open.value: "REAL",
@@ -54,7 +44,7 @@ class DBColumns(Enum):
         }
 
     @classmethod
-    def calculations(cls) -> Dict:
+    def sma_calculations(cls) -> Dict:
         return {
             cls.ma_200.value: 200,
             cls.ma_50.value: 50,

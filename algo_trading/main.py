@@ -1,15 +1,17 @@
 import os
+import sys
 from datetime import date, datetime, timedelta
 from typing import Dict, List
-import pandas as pd
 
+import pandas as pd
 import yaml as yl
 from dotenv import load_dotenv
 
+from calculations import Calculator
 from data_handler import get_data_handler
 from db_handler import get_db_handler
+from controllers import ColumnController
 from utils import clean_df
-from schemas import DFColumns, DBColumns
 
 load_dotenv("../local.env")
 
@@ -37,13 +39,14 @@ DATABASE = os.getenv("POSTGRES_DB")
 USER = os.getenv("POSTGRES_USER")
 PASSWORD = os.getenv("POSTGRES_PASSWORD")
 
-# Loading in Tickers config
+# Loading in and parsing CONFIG
 CONFIG = yl.safe_load(open("config.yml", "r"))
-
-# Parsing configs/building variables for processing
 TICKERS = CONFIG["ticker_list"]
 DB_HANDLER = CONFIG["db_handler"]
 DATA_HANDLER = CONFIG["data_handler"]
+
+# Building global vars for processing
+DATE_FORMAT = "%Y-%m-%d"
 DB_INFO = {
     "host": HOST,
     "database": DATABASE,
@@ -51,7 +54,6 @@ DB_INFO = {
     "password": PASSWORD,
     "port": "5432",
 }
-DATE_FORMAT = "%Y-%m-%d"
 
 
 def create_new_tables() -> List:
@@ -68,7 +70,7 @@ def create_new_tables() -> List:
     return new_tickers
 
 
-def get_new_ticker_data(new_tickers: List, rolling_col: str) -> Dict:
+def get_new_ticker_data(new_tickers: List) -> Dict:
     """
     Gets historical data for the list of new tickers found.
     Does not put into the DB, but keeps it in memory for the
@@ -89,11 +91,8 @@ def get_new_ticker_data(new_tickers: List, rolling_col: str) -> Dict:
             ticker, "max", date.today().strftime(DATE_FORMAT), "1d"
         )
         stock_df = clean_df(stock_df)
-        stock_df = stock_df.sort_values(["date"], ascending=True)
-
-        # Calculating SMAs
-        for col, val in DBColumns.calculations().items():
-            stock_df[col] = stock_df[rolling_col].rolling(val).mean()
+        stock_df = stock_df.sort_values([ColumnController.date.value], ascending=True)
+        stock_df = Calculator.calculate_sma(stock_df, ColumnController.close.value)
 
         new_ticker_data[ticker] = stock_df
     return new_ticker_data
@@ -114,7 +113,7 @@ def add_new_ticker_data(new_ticker_data: Dict) -> None:
         db_handler.df_to_sql(ticker, df)
 
 
-def get_existing_ticker_data(new_tickers: List, rolling_col: str) -> Dict:
+def get_existing_ticker_data(new_tickers: List) -> Dict:
     """
     Gets data for the list of existing tickers. The DF date will
     start with the day after the last date entry (inclusive) and end
@@ -143,43 +142,50 @@ def get_existing_ticker_data(new_tickers: List, rolling_col: str) -> Dict:
         end_date = date.today()
         end_date_str = end_date.strftime(DATE_FORMAT)
 
-        print(f"last date entry for {ticker}: {last_date_entry}")
-        print(f"pulling {ticker} from {query_date_str} to {end_date_str}")
-        if not end_date.weekday() in [5, 6]:
-            stock_df = data_handler.get_stock_data(
-                ticker, query_date_str, end_date_str, "1d"
+        if end_date.weekday() in [5, 6]:
+            sys.exit(f"{end_date_str} is a weekend! No run run today boo boo...")
+
+        print(f"Last date entry for {ticker}: {last_date_entry}")
+        print(f"Pulling {ticker} from {query_date_str} to {end_date_str}")
+
+        stock_df = data_handler.get_stock_data(
+            ticker, query_date_str, end_date_str, "1d"
+        )
+        stock_df = clean_df(stock_df)
+        stock_df = stock_df.sort_values([ColumnController.date.value], ascending=True)
+
+        # One-off error found when the API returns data for a weekend
+        # Only process the data if the first date of the returned DF is
+        # greater than or equal to the query_date.
+        if datetime.strptime(
+            stock_df[ColumnController.date.value][0], DATE_FORMAT
+        ) < datetime(query_date.year, query_date.month, query_date.day):
+            raise ValueError(
+                f"First date of stock_df is greater than query date: {query_date_str}"
             )
-            if stock_df is not None:
-                stock_df = clean_df(stock_df)
-                stock_df = stock_df.sort_values(["date"], ascending=True)
 
-                # One-off error found when the API returns data for a weekend
-                if datetime.strptime(stock_df["date"][0], DATE_FORMAT) >= datetime(
-                    query_date.year, query_date.month, query_date.day
-                ):
-                    print(
-                        f"adding {ticker} data for dates "
-                        + f"{stock_df['date'].iloc[0]} -> {stock_df['date'].iloc[-1]}"
-                    )
+        print(
+            f"adding {ticker} data for dates "
+            + f"{stock_df[ColumnController.date.value].iloc[0]}"
+            + f"-> {stock_df[ColumnController.date.value].iloc[-1]}"
+        )
 
-                    # Getting rows 199 days back from the earliest row of the DF
-                    condition = f"ORDER BY date DESC LIMIT 199"
-                    hist_df = db_handler.get_data(ticker, condition)
-                    hist_df = hist_df.sort_values(["date"], ascending=True)
-                    full_df = pd.concat([hist_df, stock_df], axis=0).reset_index(
-                        drop=True
-                    )
+        # Getting rows 199 days back from the earliest row of the DF
+        hist_df = db_handler.get_data(ticker, condition="ORDER BY date DESC LIMIT 199")
+        hist_df = hist_df.sort_values([ColumnController.date.value], ascending=True)
+        full_df = pd.concat([hist_df, stock_df], axis=0).reset_index(drop=True)
+        full_df[ColumnController.date.value] = pd.to_datetime(
+            full_df[ColumnController.date.value]
+        )
 
-                    # Calculating SMAs after
-                    for col, val in DBColumns.calculations().items():
-                        full_df[col] = full_df[rolling_col].rolling(val).mean()
+        full_df = Calculator.calculate_sma(full_df, ColumnController.close.value)
 
-                    # Only getting the new rows to upload to the DB
-                    full_df["date"] = pd.to_datetime(full_df["date"])
-                    mask = full_df["date"] >= stock_df["date"][0]
-                    updated_ticker_data[ticker] = full_df.loc[mask]
-        else:
-            print(f"{end_date_str} is a weekend! No run run today boo boo...")
+        # Only getting the new rows to upload to the DB
+        mask = (
+            full_df[ColumnController.date.value]
+            >= stock_df[ColumnController.date.value][0]
+        )
+        updated_ticker_data[ticker] = full_df.loc[mask]
     return updated_ticker_data
 
 
@@ -198,8 +204,8 @@ def add_existing_ticker_data(existing_ticker_data: Dict) -> None:
 
 if __name__ == "__main__":
     new_tickers = create_new_tables()
-    new_ticker_data = get_new_ticker_data(new_tickers, "close")
+    new_ticker_data = get_new_ticker_data(new_tickers)
     add_new_ticker_data(new_ticker_data)
 
-    existing_ticker_data = get_existing_ticker_data(new_tickers, "close")
+    existing_ticker_data = get_existing_ticker_data(new_tickers)
     add_existing_ticker_data(existing_ticker_data)
