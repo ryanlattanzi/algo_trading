@@ -28,11 +28,9 @@ class PostgresHandler:
         df.to_sql(ticker, con=self.db_engine, if_exists="append", index=False)
 
     def get_most_recent_date(self, ticker: str) -> str:
-        query_line = f"""SELECT DATE FROM {ticker} ORDER BY DATE DESC LIMIT 1"""
-        with self.db_engine.connect() as connection:
-            last_entry_date = connection.execute(query_line)
-        # need to find a better way to parse query results
-        return [item[0] for item in last_entry_date][0]
+        query = f"""SELECT DATE FROM {ticker} ORDER BY DATE DESC LIMIT 1"""
+        date = pd.read_sql(query, con=self.db_engine).iloc[0, 0]
+        return date
 
     def get_data(self, ticker: str, condition: str = "") -> pd.DataFrame:
         query = f"SELECT * FROM {ticker} {condition}".strip()

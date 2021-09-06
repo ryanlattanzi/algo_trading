@@ -1,0 +1,39 @@
+version: '3.4'
+
+volumes:
+  postgres_data:
+
+networks:
+  algo_trading_network:
+
+services:
+  postgres:
+    image: postgres:10
+    volumes:
+      - postgres_data:/var/lib/postgresql/data/pgdata
+    env_file:
+      - local.env
+    ports:
+      - 5432:5432
+    networks:
+      - algo_trading_network
+
+  pgadmin:
+    image: dpage/pgadmin4
+    restart: always
+    depends_on:
+      - postgres
+    env_file:
+      - local.env
+    ports:
+      - 80:80
+    networks:
+      - algo_trading_network
+
+  redis:
+    image: redis:6
+    ports:
+      - 6379:6379
+    command: redis-server --requirepass redispassword
+    networks:
+      - algo_trading_network
