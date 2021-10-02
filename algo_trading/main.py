@@ -34,25 +34,39 @@ TODO: Create a Logging mechanism
 """
 
 # Loading in DB info
-HOST = os.getenv("POSTGRES_HOST")
-DATABASE = os.getenv("POSTGRES_DB")
-USER = os.getenv("POSTGRES_USER")
-PASSWORD = os.getenv("POSTGRES_PASSWORD")
+DB_HOST = os.getenv("POSTGRES_HOST")
+DB_PORT = os.getenv("POSTGRES_HOST")
+DB_DATABASE = os.getenv("POSTGRES_DB")
+DB_USER = os.getenv("POSTGRES_USER")
+DB_PASSWORD = os.getenv("POSTGRES_PASSWORD")
+
+# Loading in IN MEMORY info
+IN_MEM_HOST = os.getenv("REDIS_HOST")
+IN_MEM_PORT = os.getenv("REDIS_PORT")
+IN_MEM_DATABASE = os.getenv("REDIS_DB")
+IN_MEM_PASSWORD = os.getenv("REDIS_PASSWORD")
 
 # Loading in and parsing CONFIG
 CONFIG = yl.safe_load(open("config.yml", "r"))
 TICKERS = CONFIG["ticker_list"]
 DB_HANDLER = CONFIG["db_handler"]
 DATA_HANDLER = CONFIG["data_handler"]
+IN_MEM_HANDLER = CONFIG["in_memory_handler"]
 
 # Building global vars for processing
 DATE_FORMAT = "%Y-%m-%d"
 DB_INFO = {
-    "host": HOST,
-    "database": DATABASE,
-    "user": USER,
-    "password": PASSWORD,
+    "host": DB_HOST,
+    "database": DB_DATABASE,
+    "user": DB_USER,
+    "password": DB_PASSWORD,
     "port": "5432",
+}
+IN_MEMORY_INFO = {
+    "host": IN_MEM_HOST,
+    "port": IN_MEM_PORT,
+    "db": IN_MEM_DATABASE,
+    "password": IN_MEM_PASSWORD,
 }
 
 
