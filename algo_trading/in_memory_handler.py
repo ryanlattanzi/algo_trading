@@ -51,7 +51,7 @@ if __name__ == "__main__":
     r.set('countries', {"Croatia": "Zagreb", "Bahamas": "Nassau"})
     current = json.loads(r.get("countries"))
     print(current['Croatia'])
-    current['Croatia'] = 'dick'
+    current['Croatia'] = 'test'
     print(current)
     r.set('countries', current)
     print(r.get('countries'))
