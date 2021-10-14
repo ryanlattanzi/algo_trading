@@ -5,6 +5,7 @@ from urllib.error import HTTPError
 
 import pandas as pd
 from dateutil.parser import parse
+from db_handler import PostgresHandler
 
 
 import ssl
@@ -14,7 +15,7 @@ ssl._create_default_https_context = ssl._create_unverified_context
 
 class YahooFinanceDataHandler:
     def get_stock_data(
-        self, symbol: str, start_date: str, end_date: str, interval: str
+        self, symbol: str, start_date: str, end_date: str, interval: str, db_connector: PostgresHandler
     ) -> pd.DataFrame:
         try:
             hist_data = pd.read_csv(
