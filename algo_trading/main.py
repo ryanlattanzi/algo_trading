@@ -1,5 +1,6 @@
 import os
 import sys
+import json
 from datetime import date, datetime, timedelta
 from typing import Dict, List
 
@@ -10,6 +11,7 @@ from dotenv import load_dotenv
 from calculations import Calculator
 from data_handler import get_data_handler
 from db_handler import get_db_handler
+from in_memory_handler import get_in_memory_handler
 from controllers import ColumnController
 from utils import clean_df
 
@@ -214,6 +216,35 @@ def add_existing_ticker_data(existing_ticker_data: Dict) -> None:
 
     for ticker, df in existing_ticker_data.items():
         db_handler.df_to_sql(ticker, df)
+
+def update_redis() -> None:
+    db_handler = get_db_handler(DB_HANDLER, TICKERS, DB_INFO)
+    in_mem_handler = get_in_memory_handler(IN_MEM_HANDLER, IN_MEMORY_INFO)
+
+    for ticker in TICKERS:
+        data = db_handler.get_data(ticker, condition='ORDER BY DATE DESC LIMIT 2')
+        current_data = json.loads(in_mem_handler.get(ticker))
+
+        if current_data is None:
+            current_data = {'last_cross_up': None,
+                            'cross_up_market_cond': None,
+                            'last_cross_down': None}
+
+        if ((data["ma_7"].iloc[0] >= data["ma_21"].iloc[0])
+            and (data["ma_7"].iloc[1] < data["ma_21"].iloc[1])):
+            current_data['last_cross_up'] = data['date'].iloc[0].strftime(DATE_FORMAT)
+            if (
+                    data["ma_21"].iloc[0] <= data["ma_50"].iloc[0]
+                    or data["ma_50"].iloc[0] <= data["ma_200"].iloc[0]
+            ):
+                current_data['cross_up_market_cond'] = 'bear'
+            else:
+                current_data['cross_up_market_cond'] = 'bull'
+        elif ((data["ma_7"].iloc[0] < data["ma_21"].iloc[0])
+            and (data["ma_7"].iloc[1] >= data["ma_21"].iloc[1])):
+            current_data['last_cross_down'] = data['date'].iloc[0].strftime(DATE_FORMAT)
+
+        in_mem_handler.set(ticker, current_data)
 
 
 if __name__ == "__main__":

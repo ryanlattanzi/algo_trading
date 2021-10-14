@@ -2,6 +2,7 @@ from typing import Any, Dict, Union
 import redis
 import socket
 from redis.exceptions import ConnectionError
+import json
 
 
 class RedisHandler:
@@ -12,8 +13,8 @@ class RedisHandler:
         except (socket.gaierror, ConnectionError) as e:
             print("bruh")
 
-    def set(self, data: Dict[str, Any]) -> None:
-        self.redis_conn.mset(data)
+    def set(self, key: str, data: Dict[str, Any]) -> None:
+        self.redis_conn.set(key, json.dumps(data))
 
     def get(self, key: str) -> Any:
         return self.redis_conn.get(key)
@@ -47,8 +48,14 @@ if __name__ == "__main__":
     }
 
     r = RedisHandler(IN_MEMORY_INFO)
-    r.set({"Croatia": "Zagreb", "Bahamas": "Nassau"})
-    print(r.get("Bahamas"))
+    r.set('countries', {"Croatia": "Zagreb", "Bahamas": "Nassau"})
+    current = json.loads(r.get("countries"))
+    print(current['Croatia'])
+    current['Croatia'] = 'dick'
+    print(current)
+    r.set('countries', current)
+    print(r.get('countries'))
+
 
 
 # things to add to redis
