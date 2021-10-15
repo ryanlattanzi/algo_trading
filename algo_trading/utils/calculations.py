@@ -1,4 +1,4 @@
-from controllers import ColumnController
+from config.controllers import ColumnController
 
 
 class Calculator:

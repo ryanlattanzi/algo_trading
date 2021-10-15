@@ -51,3 +51,11 @@ class ColumnController(Enum):
             cls.ma_21.value: 21,
             cls.ma_7.value: 7,
         }
+
+
+class DBTypeController(Enum):
+    postgres = "postgres"
+
+
+class DataHandlerController(Enum):
+    yahoo_finance = "yahoo_finance"
