@@ -6,28 +6,27 @@ import pandas as pd
 
 from datetime import datetime, timedelta
 
-from db_handler import get_db_handler, PostgresHandler
-from in_memory_handler import get_in_memory_handler, RedisHandler
-from controllers import ColumnController
-from main import DATE_FORMAT
-
-
-
+from handlers.db_handler import get_db_handler, PostgresHandler
+from handlers.in_memory_handler import get_in_memory_handler, RedisHandler
+from config.controllers import ColumnController
+from constants import DATE_FORMAT
 
 
 class SMACross:
-    def __init__(self, ticker: str, sma_db: PostgresHandler, cross_db: RedisHandler) -> None:
+    def __init__(
+        self, ticker: str, sma_db: PostgresHandler, cross_db: RedisHandler
+    ) -> None:
 
         self.ticker = ticker
-        self.sma_dbj= sma_db
+        self.sma_dbj = sma_db
         self.cross_db = cross_db
 
     def _get_cross_info(self) -> Dict:
         return json.loads(self.cross_db.get(ticker))
 
     def _get_sma_info(self) -> Dict:
-        data = self.sma_db.get_data(ticker, condition='ORDER BY DATE DESC LIMIT 1')
-        return data.to_dict('records')[0]
+        data = self.sma_db.get_data(ticker, condition="ORDER BY DATE DESC LIMIT 1")
+        return data.to_dict("records")[0]
 
     def check_sma_cross(self) -> Tuple[datetime.date, str, str]:
 
@@ -36,8 +35,12 @@ class SMACross:
         cross_info = self._get_cross_info()
         sma_info = self._get_sma_info()
 
-        cross_info['last_cross_up'] = datetime.strptime(cross_info['last_cross_up'], DATE_FORMAT)
-        cross_info['last_cross_down'] = datetime.strptime(cross_info['last_cross_down'], DATE_FORMAT)
+        cross_info["last_cross_up"] = datetime.strptime(
+            cross_info["last_cross_up"], DATE_FORMAT
+        )
+        cross_info["last_cross_down"] = datetime.strptime(
+            cross_info["last_cross_down"], DATE_FORMAT
+        )
 
         # Steps
         # Which date in

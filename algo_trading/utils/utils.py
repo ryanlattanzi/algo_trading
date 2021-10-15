@@ -1,8 +1,10 @@
 from typing import List
+from datetime import datetime
 
 import pandas as pd
 
-from controllers import ColumnController
+from config.controllers import ColumnController
+from constants import DATE_FORMAT
 
 
 def clean_df(df: pd.DataFrame) -> pd.DataFrame:
@@ -29,3 +31,11 @@ def dedupe_by_date(df: pd.DataFrame) -> pd.DataFrame:
 
 def snake_case(cols: List) -> List:
     return [x.lower().replace(" ", "_") for x in cols]
+
+
+def str_to_dt(date_str: str, fmt: str = DATE_FORMAT) -> datetime:
+    return datetime.strptime(date_str, fmt)
+
+
+def dt_to_str(dt: datetime, fmt: str = DATE_FORMAT) -> str:
+    return dt.strftime(fmt)

@@ -7,11 +7,12 @@ import json
 
 class RedisHandler:
     def __init__(self, redis_info: Dict) -> None:
-        print(redis_info)
         try:
             self.redis_conn = redis.Redis(**redis_info)
         except (socket.gaierror, ConnectionError) as e:
-            print("bruh")
+            raise ConnectionError(
+                "Could not connect to redis with connection info: " + f"{redis_info}"
+            )
 
     def set(self, key: str, data: Dict[str, Any]) -> None:
         self.redis_conn.set(key, json.dumps(data))
@@ -48,14 +49,13 @@ if __name__ == "__main__":
     }
 
     r = RedisHandler(IN_MEMORY_INFO)
-    r.set('countries', {"Croatia": "Zagreb", "Bahamas": "Nassau"})
+    r.set("countries", {"Croatia": "Zagreb", "Bahamas": "Nassau"})
     current = json.loads(r.get("countries"))
-    print(current['Croatia'])
-    current['Croatia'] = 'test'
+    print(current["Croatia"])
+    current["Croatia"] = "test_val"
     print(current)
-    r.set('countries', current)
-    print(r.get('countries'))
-
+    r.set("countries", current)
+    print(r.get("countries"))
 
 
 # things to add to redis
@@ -65,3 +65,8 @@ if __name__ == "__main__":
 #         bear_cross_up: bool,
 #         last_cross_down: date,
 #        }
+#
+# ALSO - NEED TO THINK ABOUT ORGANIZING DBS IN REDIS:
+# (maybe keep this in a postgres table?)
+# 0: current tickers we are tracking
+# 1: SMA_7_21_50_200 strategy
