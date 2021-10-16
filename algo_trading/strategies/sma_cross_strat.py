@@ -6,9 +6,9 @@ import pandas as pd
 
 from datetime import datetime, timedelta
 
-from algo_trading.handlers.db_handler import DBRepository
-from algo_trading.handlers.in_memory_handler import get_in_memory_handler, RedisHandler
-from algo_trading.utils.utils import str_to_dt
+from handlers.db_handler import DBRepository
+from handlers.in_memory_handler import get_in_memory_handler, RedisHandler
+from utils.utils import str_to_dt
 
 """Description of algorithm:
 

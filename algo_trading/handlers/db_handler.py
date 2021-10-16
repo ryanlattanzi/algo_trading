@@ -6,8 +6,8 @@ import pandas as pd
 import sqlalchemy as sa
 from sqlalchemy.engine.base import Engine
 
-from algo_trading.config.controllers import ColumnController, DBTypeController
-from algo_trading.utils.utils import dt_to_str
+from config.controllers import ColumnController, DBTypeController
+from utils.utils import dt_to_str
 
 
 class AbstractDBRepository(ABC):

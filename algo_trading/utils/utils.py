@@ -3,8 +3,8 @@ from datetime import datetime
 
 import pandas as pd
 
-from algo_trading.config.controllers import ColumnController
-from algo_trading.constants import DATE_FORMAT
+from config.controllers import ColumnController
+from constants import DATE_FORMAT
 
 
 def clean_df(df: pd.DataFrame) -> pd.DataFrame:

@@ -1,4 +1,4 @@
-from algo_trading.config.controllers import ColumnController
+from config.controllers import ColumnController
 
 
 class Calculator:
