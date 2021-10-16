@@ -62,8 +62,8 @@ if __name__ == "__main__":
 # key: ticker
 # value: {
 #         last_cross_up: date,
-#         bear_cross_up: bool,
 #         last_cross_down: date,
+#         last_status: str, (BUY, SELL)
 #        }
 #
 # ALSO - NEED TO THINK ABOUT ORGANIZING DBS IN REDIS:

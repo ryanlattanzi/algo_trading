@@ -3,7 +3,6 @@ import sys
 import json
 from datetime import date, datetime, timedelta
 from typing import Dict, List
-from collections import defaultdict
 
 import pandas as pd
 import yaml as yl
@@ -241,8 +240,8 @@ def update_redis() -> None:
             print(f"No Redis data for {ticker}. Creating now.")
             current_data = {
                 "last_cross_up": None,
-                "cross_up_market_cond": None,
-                "last_cross_down": None,
+                "last_cross_down": dt_to_str(data["date"].iloc[0]),
+                "last_status": "SELL",
             }
         else:
             current_data = json.loads(current_data)
@@ -251,18 +250,16 @@ def update_redis() -> None:
         if (data["ma_7"].iloc[0] >= data["ma_21"].iloc[0]) and (
             data["ma_7"].iloc[1] < data["ma_21"].iloc[1]
         ):
-            current_data["last_cross_up"] = data["date"].iloc[0].strftime(DATE_FORMAT)
-            if (
-                data["ma_21"].iloc[0] <= data["ma_50"].iloc[0]
-                or data["ma_50"].iloc[0] <= data["ma_200"].iloc[0]
-            ):
-                current_data["cross_up_market_cond"] = "bear"
-            else:
-                current_data["cross_up_market_cond"] = "bull"
+            if data["close"].iloc[0] > data["ma_50"].iloc[0]:
+                current_data["last_cross_up"] = dt_to_str(data["date"].iloc[0])
+
         elif (data["ma_7"].iloc[0] < data["ma_21"].iloc[0]) and (
             data["ma_7"].iloc[1] >= data["ma_21"].iloc[1]
         ):
-            current_data["last_cross_down"] = data["date"].iloc[0].strftime(DATE_FORMAT)
+            if str_to_dt(current_data["last_cross_down"]) < str_to_dt(
+                current_data["last_cross_up"]
+            ):
+                current_data["last_cross_down"] = dt_to_str(data["date"].iloc[0])
 
         in_mem_handler.set(ticker, current_data)
         print(f"Updated Redis for {ticker}: {json.dumps(current_data, indent=2)}")

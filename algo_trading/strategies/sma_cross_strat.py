@@ -6,41 +6,41 @@ import pandas as pd
 
 from datetime import datetime, timedelta
 
-from handlers.db_handler import get_db_handler, PostgresHandler
+from handlers.db_handler import DBRepository
 from handlers.in_memory_handler import get_in_memory_handler, RedisHandler
-from config.controllers import ColumnController
-from constants import DATE_FORMAT
+from utils.utils import str_to_dt
+
+"""Description of algorithm:
+
+
+"""
 
 
 class SMACross:
     def __init__(
-        self, ticker: str, sma_db: PostgresHandler, cross_db: RedisHandler
+        self, ticker: str, sma_db: DBRepository, cross_db: RedisHandler
     ) -> None:
 
         self.ticker = ticker
-        self.sma_dbj = sma_db
+        self.sma_db = sma_db
         self.cross_db = cross_db
 
-    def _get_cross_info(self) -> Dict:
+    @property
+    def cross_info(self) -> Dict:
         return json.loads(self.cross_db.get(ticker))
 
-    def _get_sma_info(self) -> Dict:
-        data = self.sma_db.get_data(ticker, condition="ORDER BY DATE DESC LIMIT 1")
+    @property
+    def sma_info(self) -> Dict:
+        data = self.sma_db.get_days_back(ticker, 1)
         return data.to_dict("records")[0]
 
     def check_sma_cross(self) -> Tuple[datetime.date, str, str]:
 
         buffer = 1.0
         date = self.slice["date"].iloc[0]
-        cross_info = self._get_cross_info()
-        sma_info = self._get_sma_info()
 
-        cross_info["last_cross_up"] = datetime.strptime(
-            cross_info["last_cross_up"], DATE_FORMAT
-        )
-        cross_info["last_cross_down"] = datetime.strptime(
-            cross_info["last_cross_down"], DATE_FORMAT
-        )
+        last_cross_up_dt = str_to_dt(self.cross_info["last_cross_up"])
+        last_cross_down_dt = str_to_dt(self.cross_info["last_cross_down"])
 
         # Steps
         # Which date in
@@ -70,7 +70,6 @@ if __name__ == "__main__":
     IN_MEM_HANDLER = CONFIG["in_memory_handler"]
 
     # Building global vars for processing
-    DATE_FORMAT = "%Y-%m-%d"
     DB_INFO = {
         "host": HOST,
         "database": DATABASE,
@@ -88,12 +87,12 @@ if __name__ == "__main__":
 
     # Creating db_handler (works with just one stock for now)
     ticker = "aapl"
-    sma_db = get_db_handler(DB_HANDLER, [ticker], DB_INFO)
+    sma_db = DBRepository([ticker], DB_INFO, DB_HANDLER)
     in_mem = get_in_memory_handler(IN_MEM_HANDLER, IN_MEMORY_INFO)
 
     # Define a start pull date to run the simulation
     start_date = "2021-07-11"
-    curr_date = datetime.strptime(start_date, DATE_FORMAT)
+    curr_date = str_to_dt(start_date)
     last_date_entry = sma_db.get_most_recent_date(ticker)
 
     # Running SMA for every day since the given start date up until the most
