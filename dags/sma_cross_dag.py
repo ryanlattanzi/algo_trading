@@ -8,13 +8,13 @@ import pandas as pd
 import yaml as yl
 from dotenv import load_dotenv
 
-from utils.calculations import Calculator
-from handlers.data_handler import DataRepository
-from handlers.db_handler import DBRepository
-from handlers.in_memory_handler import get_in_memory_handler
-from config.controllers import ColumnController
-from utils.utils import clean_df, str_to_dt, dt_to_str
-from constants import DATE_FORMAT
+from algo_trading.utils.calculations import Calculator
+from algo_trading.handlers.data_handler import DataRepository
+from algo_trading.handlers.db_handler import DBRepository
+from algo_trading.handlers.in_memory_handler import get_in_memory_handler
+from algo_trading.config.controllers import ColumnController
+from algo_trading.utils.utils import clean_df, str_to_dt, dt_to_str
+from algo_trading.constants import DATE_FORMAT
 
 load_dotenv("../local.env")
 

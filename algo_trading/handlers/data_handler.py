@@ -8,7 +8,7 @@ import ssl
 import pandas as pd
 from dateutil.parser import parse
 
-from config.controllers import DataHandlerController
+from algo_trading.config.controllers import DataHandlerController
 
 
 ssl._create_default_https_context = ssl._create_unverified_context
