@@ -1,6 +1,6 @@
-db_handler: postgres
-data_handler: yahoo_finance
-in_memory_handler: redis
+db_repo: postgres
+data_repo: yahoo_finance
+kv_repo: redis
 ticker_list:
   - aapl
 #  - fb

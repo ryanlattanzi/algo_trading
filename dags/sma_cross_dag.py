@@ -9,9 +9,9 @@ import yaml as yl
 from dotenv import load_dotenv
 
 from algo_trading.utils.calculations import Calculator
-from algo_trading.handlers.data_handler import DataRepository
-from algo_trading.handlers.db_handler import DBRepository
-from algo_trading.handlers.in_memory_handler import get_in_memory_handler
+from algo_trading.repositories.data_repository import DataRepository
+from algo_trading.repositories.db_repository import DBRepository
+from algo_trading.repositories.key_val_repository import KeyValueRepository
 from algo_trading.config.controllers import ColumnController
 from algo_trading.utils.utils import clean_df, str_to_dt, dt_to_str
 from algo_trading.constants import DATE_FORMAT
@@ -44,10 +44,10 @@ DB_USER = os.getenv("POSTGRES_USER")
 DB_PASSWORD = os.getenv("POSTGRES_PASSWORD")
 
 # Loading in IN MEMORY info
-IN_MEM_HOST = os.getenv("REDIS_HOST")
-IN_MEM_PORT = os.getenv("REDIS_PORT")
-IN_MEM_DATABASE = os.getenv("REDIS_DB")
-IN_MEM_PASSWORD = os.getenv("REDIS_PASSWORD")
+KV_HOST = os.getenv("REDIS_HOST")
+KV_PORT = os.getenv("REDIS_PORT")
+KV_DATABASE = os.getenv("REDIS_DB")
+KV_PASSWORD = os.getenv("REDIS_PASSWORD")
 
 # Loading in and parsing CONFIG
 CONFIG_PATH = os.path.join(
@@ -56,9 +56,9 @@ CONFIG_PATH = os.path.join(
 )
 CONFIG = yl.safe_load(open(CONFIG_PATH, "r"))
 TICKERS = CONFIG["ticker_list"]
-DB_HANDLER = CONFIG["db_handler"]
-DATA_HANDLER = CONFIG["data_handler"]
-IN_MEM_HANDLER = CONFIG["in_memory_handler"]
+DB_HANDLER = CONFIG["db_repo"]
+DATA_HANDLER = CONFIG["data_repo"]
+KV_HANDLER = CONFIG["kv_repo"]
 
 # Building global vars for processing
 
@@ -69,11 +69,11 @@ DB_INFO = {
     "password": DB_PASSWORD,
     "port": "5432",
 }
-IN_MEMORY_INFO = {
-    "host": IN_MEM_HOST,
-    "port": IN_MEM_PORT,
-    "db": IN_MEM_DATABASE,
-    "password": IN_MEM_PASSWORD,
+KV_INFO = {
+    "host": KV_HOST,
+    "port": KV_PORT,
+    "db": KV_DATABASE,
+    "password": KV_PASSWORD,
 }
 
 
@@ -231,11 +231,11 @@ def add_existing_ticker_data(existing_ticker_data: Dict) -> None:
 
 def update_redis() -> None:
     db_handler = DBRepository(TICKERS, DB_INFO, DB_HANDLER)
-    in_mem_handler = get_in_memory_handler(IN_MEM_HANDLER, IN_MEMORY_INFO)
+    kv_handler = KeyValueRepository(KV_INFO, KV_HANDLER).handler
 
     for ticker in TICKERS:
         data = db_handler.get_days_back(ticker, 2)
-        current_data = in_mem_handler.get(ticker)
+        current_data = kv_handler.get(ticker)
 
         if current_data is None:
             print(f"No Redis data for {ticker}. Creating now.")
@@ -262,7 +262,7 @@ def update_redis() -> None:
             ):
                 current_data["last_cross_down"] = dt_to_str(data["date"].iloc[0])
 
-        in_mem_handler.set(ticker, current_data)
+        kv_handler.set(ticker, current_data)
         print(f"Updated Redis for {ticker}: {json.dumps(current_data, indent=2)}")
 
 
