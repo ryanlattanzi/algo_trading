@@ -59,3 +59,7 @@ class DBTypeController(Enum):
 
 class DataHandlerController(Enum):
     yahoo_finance = "yahoo_finance"
+
+
+class KeyValueController(Enum):
+    redis = "redis"
