@@ -12,7 +12,7 @@ from algo_trading.utils.calculations import Calculator
 from algo_trading.repositories.data_repository import DataRepository
 from algo_trading.repositories.db_repository import DBRepository
 from algo_trading.repositories.key_val_repository import KeyValueRepository
-from algo_trading.config.controllers import ColumnController
+from algo_trading.config.controllers import ColumnController, StockStatusController
 from algo_trading.utils.utils import clean_df, str_to_dt, dt_to_str
 from algo_trading.constants import DATE_FORMAT
 
@@ -122,6 +122,57 @@ def get_new_ticker_data(new_tickers: List) -> Dict:
     return new_ticker_data
 
 
+def cross_up(data: pd.DataFrame, index: int) -> bool:
+    """Checks to see if a cross up occured by looking at
+    the current date 7 and 21 day SMA and the previous date
+    7 and 21 day SMA. Finally, we only consider cross up
+    when the close price > 50 ay SMA otherwise the market
+    is considered bearish.
+
+    Args:
+        data (pd.DataFrame): Data to parse SMA info.
+        index (int): Indicates current day. index + 1 = prev day.
+
+    Returns:
+        bool: True if all conditions are met.
+    """
+    return (
+        (
+            data[ColumnController.ma_7.value].iloc[index]
+            >= data[ColumnController.ma_21.value].iloc[index]
+        )
+        and (
+            data[ColumnController.ma_7.value].iloc[index + 1]
+            < data[ColumnController.ma_21.value].iloc[index + 1]
+        )
+        and (
+            data[ColumnController.close.value].iloc[index]
+            > data[ColumnController.ma_50.value].iloc[index]
+        )
+    )
+
+
+def cross_down(data: pd.DataFrame, index: int) -> bool:
+    """Checks to see if a cross down occured by looking at
+    the current date 7 and 21 day SMA and the previous date
+    7 and 21 day SMA.
+
+    Args:
+        data (pd.DataFrame): Data to parse SMA info.
+        index (int): Indicates current day. index + 1 = prev day.
+
+    Returns:
+        bool: True if all conditions are met.
+    """
+    return (
+        data[ColumnController.ma_7.value].iloc[index]
+        < data[ColumnController.ma_21.value].iloc[index]
+    ) and (
+        data[ColumnController.ma_7.value].iloc[index + 1]
+        >= data[ColumnController.ma_21.value].iloc[index + 1]
+    )
+
+
 def add_new_ticker_data(new_ticker_data: Dict) -> None:
     """
     Slaps the historical data from pd.DataFrame into the DB.
@@ -135,6 +186,54 @@ def add_new_ticker_data(new_ticker_data: Dict) -> None:
 
     for ticker, df in new_ticker_data.items():
         db_handler.append_df_to_sql(ticker, df)
+
+
+def backfill_redis(new_ticker_data: Dict) -> None:
+    """Gets up to date redis data for new tickers to indicate last
+    cross dates and status.
+
+    Args:
+        new_ticker_data (Dict): New tickers to update redis with.
+    """
+    kv_handler = KeyValueRepository(KV_INFO, KV_HANDLER).handler
+    for ticker, data in new_ticker_data.items():
+        current_data = kv_handler.get(ticker)
+        if current_data is not None:
+            # raise ValueError(f"Redis data for {ticker} already exists bum!")
+            print(
+                f"Redis data for {ticker} already exists bum! - resetting to empty..."
+            )
+        current_data = dict()
+        data = data.sort_values([ColumnController.date.value], ascending=False)
+
+        # Dirty way of finding out last cross up and cross down - can def do better
+        for i in range(len(data.index) - 1):
+            if cross_up(data, i):
+                current_data[ColumnController.last_cross_up.value] = data[
+                    ColumnController.date.value
+                ].iloc[i]
+                break
+
+        for i in range(len(data.index) - 1):
+            if cross_down(data, i):
+                current_data[ColumnController.last_cross_down.value] = data[
+                    ColumnController.date.value
+                ].iloc[i]
+                break
+
+        if str_to_dt(current_data[ColumnController.last_cross_down.value]) < str_to_dt(
+            current_data[ColumnController.last_cross_up.value]
+        ):
+            current_data[
+                ColumnController.last_status.value
+            ] = StockStatusController.buy.value
+        else:
+            current_data[
+                ColumnController.last_status.value
+            ] = StockStatusController.sell.value
+
+        kv_handler.set(ticker, current_data)
+        print(f"Updated Redis for {ticker}: {json.dumps(current_data, indent=2)}")
 
 
 def get_existing_ticker_data(new_tickers: List) -> Dict:
@@ -197,7 +296,7 @@ def get_existing_ticker_data(new_tickers: List) -> Dict:
         print(
             f"Adding {ticker} data for dates "
             + f"{stock_df[ColumnController.date.value].iloc[0]}"
-            + f"-> {stock_df[ColumnController.date.value].iloc[-1]}"
+            + f" -> {stock_df[ColumnController.date.value].iloc[-1]}"
         )
 
         # Getting rows 199 days back from the earliest row of the DF
@@ -229,38 +328,42 @@ def add_existing_ticker_data(existing_ticker_data: Dict) -> None:
         db_handler.append_df_to_sql(ticker, df)
 
 
-def update_redis() -> None:
+def update_redis(new_tickers: List) -> None:
+    """
+    Updates redis information for existing tickers. Includes
+    last cross up date and last cross down date.
+
+    Args:
+        new_tickers (List): New tickers. Used for exclusion.
+
+    Raises:
+        ValueError: Error raised if no redis data for the ticker.
+    """
     db_handler = DBRepository(TICKERS, DB_INFO, DB_HANDLER)
     kv_handler = KeyValueRepository(KV_INFO, KV_HANDLER).handler
 
-    for ticker in TICKERS:
+    for ticker in [t for t in TICKERS if t not in new_tickers]:
         data = db_handler.get_days_back(ticker, 2)
         current_data = kv_handler.get(ticker)
 
         if current_data is None:
-            print(f"No Redis data for {ticker}. Creating now.")
-            current_data = {
-                "last_cross_up": None,
-                "last_cross_down": dt_to_str(data["date"].iloc[0]),
-                "last_status": "SELL",
-            }
-        else:
-            current_data = json.loads(current_data)
-            print(f"Current Redis for {ticker}: {json.dumps(current_data, indent=2)}")
+            raise ValueError(f"No Redis data for ticker {ticker}...")
 
-        if (data["ma_7"].iloc[0] >= data["ma_21"].iloc[0]) and (
-            data["ma_7"].iloc[1] < data["ma_21"].iloc[1]
-        ):
-            if data["close"].iloc[0] > data["ma_50"].iloc[0]:
-                current_data["last_cross_up"] = dt_to_str(data["date"].iloc[0])
+        current_data = json.loads(current_data)
+        print(f"Current Redis for {ticker}: {json.dumps(current_data, indent=2)}")
 
-        elif (data["ma_7"].iloc[0] < data["ma_21"].iloc[0]) and (
-            data["ma_7"].iloc[1] >= data["ma_21"].iloc[1]
-        ):
-            if str_to_dt(current_data["last_cross_down"]) < str_to_dt(
-                current_data["last_cross_up"]
-            ):
-                current_data["last_cross_down"] = dt_to_str(data["date"].iloc[0])
+        if cross_up(data, 0):
+            current_data[ColumnController.last_cross_up.value] = dt_to_str(
+                data[ColumnController.date.value].iloc[0]
+            )
+
+        elif cross_down(data, 0):
+            if str_to_dt(
+                current_data[ColumnController.last_cross_down.value]
+            ) < str_to_dt(current_data[ColumnController.last_cross_up.value]):
+                current_data[ColumnController.last_cross_down.value] = dt_to_str(
+                    data[ColumnController.date.value].iloc[0]
+                )
 
         kv_handler.set(ticker, current_data)
         print(f"Updated Redis for {ticker}: {json.dumps(current_data, indent=2)}")
@@ -268,10 +371,11 @@ def update_redis() -> None:
 
 if __name__ == "__main__":
     new_tickers = create_new_tables()
+
     new_ticker_data = get_new_ticker_data(new_tickers)
     add_new_ticker_data(new_ticker_data)
+    backfill_redis(new_ticker_data)
 
     existing_ticker_data = get_existing_ticker_data(new_tickers)
     add_existing_ticker_data(existing_ticker_data)
-
-    update_redis()
+    update_redis(new_tickers)
