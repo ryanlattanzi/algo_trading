@@ -3,6 +3,7 @@ from typing import List, Dict
 
 
 class ColumnController(Enum):
+    # DB stuff
     date = "date"
     open = "open"
     high = "high"
@@ -14,6 +15,11 @@ class ColumnController(Enum):
     ma_50 = "ma_50"
     ma_21 = "ma_21"
     ma_7 = "ma_7"
+
+    # Key Value stuff
+    last_cross_up = "last_cross_up"
+    last_cross_down = "last_cross_down"
+    last_status = "last_status"
 
     @classmethod
     def df_columns(cls) -> List[str]:
@@ -51,6 +57,13 @@ class ColumnController(Enum):
             cls.ma_21.value: 21,
             cls.ma_7.value: 7,
         }
+
+
+class StockStatusController(Enum):
+    buy = "BUY"
+    sell = "SELL"
+    wait = "WAIT"
+    hold = "HOLD"
 
 
 class DBTypeController(Enum):
