@@ -66,7 +66,8 @@ class StockStatusController(Enum):
     hold = "HOLD"
 
 
-class DBTypeController(Enum):
+class DBHandlerController(Enum):
+    fake = "fake"
     postgres = "postgres"
 
 
@@ -75,4 +76,5 @@ class DataHandlerController(Enum):
 
 
 class KeyValueController(Enum):
+    fake = "fake"
     redis = "redis"

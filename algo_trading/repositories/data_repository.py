@@ -34,6 +34,15 @@ class YahooFinanceDataRepository(AbstractDataRepository):
         end_date: str,
         interval: str = "1d",
     ) -> None:
+        """Data Repository that hits the Yahoo Finance API endpoint
+        to get raw price data and return it as a pandas DF.
+
+        Args:
+            ticker (str): Ticker to fetch data.
+            start_date (str): Get data starting here.
+            end_date (str): Get data up until this point (not including).
+            interval (str, optional): Interval of datapoints. Defaults to "1d".
+        """
         self.ticker = ticker
         self.start_date = start_date
         self.end_date = end_date
@@ -69,14 +78,22 @@ class YahooFinanceDataRepository(AbstractDataRepository):
 
 
 class DataRepository:
-    data_handlers = {
-        "yahoo_finance": YahooFinanceDataRepository,
+    _data_handlers = {
+        DataHandlerController.yahoo_finance: YahooFinanceDataRepository,
     }
 
     def __init__(self, data_info: Dict, data_handler: DataHandlerController) -> None:
+        """A wrapper class to provide a consistent interface to the
+        different DataRepository types found in the _data_handlers class
+        attribute.
+
+        Args:
+            data_info (Dict): Info to splat into a DataRepository instance.
+            data_handler (DataHandlerController): Type of handler to use.
+        """
         self.data_info = data_info
         self.data_handler = data_handler
 
     @property
     def handler(self) -> AbstractDataRepository:
-        return DataRepository.data_handlers[self.data_handler](**self.data_info)
+        return DataRepository._data_handlers[self.data_handler](**self.data_info)

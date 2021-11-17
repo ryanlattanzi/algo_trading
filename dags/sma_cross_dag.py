@@ -6,7 +6,6 @@ from typing import Dict, List
 
 import pandas as pd
 import yaml as yl
-from dotenv import load_dotenv
 
 from algo_trading.utils.calculations import Calculator
 from algo_trading.repositories.data_repository import DataRepository
@@ -14,70 +13,23 @@ from algo_trading.repositories.db_repository import DBRepository
 from algo_trading.repositories.key_val_repository import KeyValueRepository
 from algo_trading.config.controllers import ColumnController, StockStatusController
 from algo_trading.utils.utils import clean_df, str_to_dt, dt_to_str
-from algo_trading.constants import DATE_FORMAT
+from algo_trading.constants import DB_INFO, KV_INFO, DATE_FORMAT
 
-load_dotenv("../local.env")
 
 """
-The purpose of this script is to run a flow of the DbHandler and StockData objects.
+The purpose of this script is to run a flow of the DBRepository and DataRepository objects.
 This is essentially a placeholder that will be replaced with a simple Airflow DAG,
-in which each function will be a task. We could really get into it and eventually
-Dockerize each task (I think this will be a good idea even though it's overkill)
+in which each function will be a task.
 
 Environment variables and config.yml will be depricated when moving to Airflow, since
-we will slap those bitches on the Airflow metastore.
+we will slap them on the Airflow metastore.
 
-Also, for both db_handler and stock_data, we will create what is called an interface
-using 'Abstract Base Class' (ABC), so that no matter which DB we connect to (MySQL, Postgres, etc),
-there will always be the same function names, but different function implementations.
-Similarly, we can do the same for stock_data for wherever we pull data (Yahoo, Binance, etc).
 
-TODO: Write a testing framework that interacts with the dev db
 TODO: Create a Logging mechanism
 """
 
-# Loading in DB info
-DB_HOST = os.getenv("POSTGRES_HOST")
-DB_PORT = os.getenv("POSTGRES_HOST")
-DB_NAME = os.getenv("POSTGRES_DB")
-DB_USER = os.getenv("POSTGRES_USER")
-DB_PASSWORD = os.getenv("POSTGRES_PASSWORD")
 
-# Loading in IN MEMORY info
-KV_HOST = os.getenv("REDIS_HOST")
-KV_PORT = os.getenv("REDIS_PORT")
-KV_DATABASE = os.getenv("REDIS_DB")
-KV_PASSWORD = os.getenv("REDIS_PASSWORD")
-
-# Loading in and parsing CONFIG
-CONFIG_PATH = os.path.join(
-    os.path.dirname(os.path.realpath(__file__)).replace("dags", "algo_trading"),
-    "config/config.yml",
-)
-CONFIG = yl.safe_load(open(CONFIG_PATH, "r"))
-TICKERS = CONFIG["ticker_list"]
-DB_HANDLER = CONFIG["db_repo"]
-DATA_HANDLER = CONFIG["data_repo"]
-KV_HANDLER = CONFIG["kv_repo"]
-
-# Building global vars for processing
-
-DB_INFO = {
-    "host": DB_HOST,
-    "db_name": DB_NAME,
-    "user": DB_USER,
-    "password": DB_PASSWORD,
-    "port": "5432",
-}
-KV_INFO = {
-    "host": KV_HOST,
-    "port": KV_PORT,
-    "db": KV_DATABASE,
-    "password": KV_PASSWORD,
-}
-
-
-def create_new_tables() -> List:
+def create_new_tables(db_info: Dict, db_handler: str, tickers: List) -> List:
     """
     Initializes the config DBInterface instance and creates new tables
     based off of new tickers that popped up in the configuration.
@@ -85,12 +37,14 @@ def create_new_tables() -> List:
     Returns:
         List: List of new tickers
     """
-    db_handler = DBRepository(TICKERS, DB_INFO, DB_HANDLER)
-    new_tickers = db_handler.create_new_ticker_tables()
+    db = DBRepository(db_info, db_handler).handler
+    new_tickers = db.create_new_ticker_tables(tickers)
     return new_tickers
 
 
-def get_new_ticker_data(new_tickers: List) -> Dict:
+def get_new_ticker_data(
+    data_handler: str, new_tickers: List
+) -> Dict[str, pd.DataFrame]:
     """
     Gets historical data for the list of new tickers found.
     Does not put into the DB, but keeps it in memory for the
@@ -112,7 +66,7 @@ def get_new_ticker_data(new_tickers: List) -> Dict:
     for ticker in new_tickers:
         data_pull_params["ticker"] = ticker
         stock_df = DataRepository(
-            data_pull_params, DATA_HANDLER
+            data_pull_params, data_handler
         ).handler.get_stock_data()
         stock_df = clean_df(stock_df)
         stock_df = stock_df.sort_values([ColumnController.date.value], ascending=True)
@@ -173,7 +127,9 @@ def cross_down(data: pd.DataFrame, index: int) -> bool:
     )
 
 
-def add_new_ticker_data(new_ticker_data: Dict) -> None:
+def add_new_ticker_data(
+    db_info: Dict, db_handler: Dict, new_ticker_data: Dict[str, pd.DataFrame]
+) -> None:
     """
     Slaps the historical data from pd.DataFrame into the DB.
     For now, this is meant to run for new tickers, since it will
@@ -182,22 +138,24 @@ def add_new_ticker_data(new_ticker_data: Dict) -> None:
     Args:
         new_ticker_data (Dict): New data to be loaded to the DB
     """
-    db_handler = DBRepository(TICKERS, DB_INFO, DB_HANDLER)
+    db = DBRepository(db_info, db_handler).handler
 
     for ticker, df in new_ticker_data.items():
-        db_handler.append_df_to_sql(ticker, df)
+        db.append_df_to_sql(ticker, df)
 
 
-def backfill_redis(new_ticker_data: Dict) -> None:
+def backfill_redis(
+    kv_info: Dict, kv_handler: str, new_ticker_data: Dict[str, pd.DataFrame]
+) -> None:
     """Gets up to date redis data for new tickers to indicate last
     cross dates and status.
 
     Args:
         new_ticker_data (Dict): New tickers to update redis with.
     """
-    kv_handler = KeyValueRepository(KV_INFO, KV_HANDLER).handler
+    kv = KeyValueRepository(kv_info, kv_handler).handler
     for ticker, data in new_ticker_data.items():
-        current_data = kv_handler.get(ticker)
+        current_data = kv.get(ticker)
         if current_data is not None:
             # raise ValueError(f"Redis data for {ticker} already exists bum!")
             print(
@@ -232,11 +190,13 @@ def backfill_redis(new_ticker_data: Dict) -> None:
                 ColumnController.last_status.value
             ] = StockStatusController.sell.value
 
-        kv_handler.set(ticker, current_data)
+        kv.set(ticker, current_data)
         print(f"Updated Redis for {ticker}: {json.dumps(current_data, indent=2)}")
 
 
-def get_existing_ticker_data(new_tickers: List) -> Dict:
+def get_existing_ticker_data(
+    db_info: Dict, db_handler: str, data_handler: str, tickers: List, new_tickers: List
+) -> Dict:
     """
     Gets data for the list of existing tickers. The DF date will
     start with the day after the last date entry (inclusive) and end
@@ -253,10 +213,10 @@ def get_existing_ticker_data(new_tickers: List) -> Dict:
         Dict: Existing data with key: ticker, val: pd.DataFrame
     """
     updated_ticker_data = dict()
-    db_handler = DBRepository(TICKERS, DB_INFO, DB_HANDLER)
+    db = DBRepository(db_info, db_handler).handler
 
-    for ticker in [t for t in TICKERS if t not in new_tickers]:
-        last_date_entry_str = db_handler.get_most_recent_date(ticker)
+    for ticker in [t for t in tickers if t not in new_tickers]:
+        last_date_entry_str = db.get_most_recent_date(ticker)
         last_date_entry = str_to_dt(last_date_entry_str)
 
         query_date = last_date_entry + timedelta(days=1)
@@ -279,7 +239,7 @@ def get_existing_ticker_data(new_tickers: List) -> Dict:
         }
 
         stock_df = DataRepository(
-            data_pull_params, DATA_HANDLER
+            data_pull_params, data_handler
         ).handler.get_stock_data()
         stock_df = clean_df(stock_df)
         stock_df = stock_df.sort_values([ColumnController.date.value], ascending=True)
@@ -300,7 +260,7 @@ def get_existing_ticker_data(new_tickers: List) -> Dict:
         )
 
         # Getting rows 199 days back from the earliest row of the DF
-        hist_df = db_handler.get_days_back(ticker, 199)
+        hist_df = db.get_days_back(ticker, 199)
         hist_df = hist_df.sort_values([ColumnController.date.value], ascending=True)
         full_df = pd.concat([hist_df, stock_df], axis=0).reset_index(drop=True)
         full_df[ColumnController.date.value] = pd.to_datetime(
@@ -315,20 +275,29 @@ def get_existing_ticker_data(new_tickers: List) -> Dict:
     return updated_ticker_data
 
 
-def add_existing_ticker_data(existing_ticker_data: Dict) -> None:
+def add_existing_ticker_data(
+    db_info: Dict, db_handler: Dict, existing_ticker_data: Dict
+) -> None:
     """
     Append updated ticker data to existing tables in the DB.
 
     Args:
         existing_ticker_data (Dict): Data to be loaded to the DB
     """
-    db_handler = DBRepository(TICKERS, DB_INFO, DB_HANDLER)
+    db = DBRepository(db_info, db_handler).handler
 
     for ticker, df in existing_ticker_data.items():
-        db_handler.append_df_to_sql(ticker, df)
+        db.append_df_to_sql(ticker, df)
 
 
-def update_redis(new_tickers: List) -> None:
+def update_redis(
+    db_info: Dict,
+    db_handler: str,
+    kv_info: Dict,
+    kv_handler: str,
+    tickers: List,
+    new_tickers: List,
+) -> None:
     """
     Updates redis information for existing tickers. Includes
     last cross up date and last cross down date.
@@ -339,12 +308,12 @@ def update_redis(new_tickers: List) -> None:
     Raises:
         ValueError: Error raised if no redis data for the ticker.
     """
-    db_handler = DBRepository(TICKERS, DB_INFO, DB_HANDLER)
-    kv_handler = KeyValueRepository(KV_INFO, KV_HANDLER).handler
+    db = DBRepository(db_info, db_handler).handler
+    kv = KeyValueRepository(kv_info, kv_handler).handler
 
-    for ticker in [t for t in TICKERS if t not in new_tickers]:
-        data = db_handler.get_days_back(ticker, 2)
-        current_data = kv_handler.get(ticker)
+    for ticker in [t for t in tickers if t not in new_tickers]:
+        data = db.get_days_back(ticker, 2)
+        current_data = kv.get(ticker)
 
         if current_data is None:
             raise ValueError(f"No Redis data for ticker {ticker}...")
@@ -365,17 +334,31 @@ def update_redis(new_tickers: List) -> None:
                     data[ColumnController.date.value].iloc[0]
                 )
 
-        kv_handler.set(ticker, current_data)
+        kv.set(ticker, current_data)
         print(f"Updated Redis for {ticker}: {json.dumps(current_data, indent=2)}")
 
 
 if __name__ == "__main__":
-    new_tickers = create_new_tables()
 
-    new_ticker_data = get_new_ticker_data(new_tickers)
-    add_new_ticker_data(new_ticker_data)
-    backfill_redis(new_ticker_data)
+    # Loading in and parsing config
+    config_path = os.path.join(
+        os.path.dirname(os.path.realpath(__file__)).replace("dags", "algo_trading"),
+        "config/config.yml",
+    )
+    config = yl.safe_load(open(config_path, "r"))
+    tickers = config["ticker_list"]
+    db_handler = config["db_repo"]
+    data_handler = config["data_repo"]
+    kv_handler = config["kv_repo"]
 
-    existing_ticker_data = get_existing_ticker_data(new_tickers)
-    add_existing_ticker_data(existing_ticker_data)
-    update_redis(new_tickers)
+    new_tickers = create_new_tables(DB_INFO, db_handler, tickers)
+
+    new_ticker_data = get_new_ticker_data(data_handler, new_tickers)
+    add_new_ticker_data(DB_INFO, db_handler, new_ticker_data)
+    backfill_redis(KV_INFO, kv_handler, new_ticker_data)
+
+    existing_ticker_data = get_existing_ticker_data(
+        DB_INFO, db_handler, data_handler, tickers, new_tickers
+    )
+    add_existing_ticker_data(DB_INFO, db_handler, existing_ticker_data)
+    update_redis(DB_INFO, db_handler, KV_INFO, kv_handler, tickers, new_tickers)
