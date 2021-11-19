@@ -3,9 +3,12 @@ import os
 import yaml as yl
 import json
 import pandas as pd
+import random
 
 from datetime import datetime, timedelta
 
+from algo_trading.strategies.events import TradeEvent
+from algo_trading.config.controllers import ColumnController, StockStatusController
 from algo_trading.repositories.db_repository import DBRepository
 from algo_trading.repositories.key_val_repository import KeyValueRepository
 from algo_trading.utils.utils import str_to_dt
@@ -25,17 +28,20 @@ class SMACross:
     ) -> None:
 
         self.ticker = ticker
-        self.sma_db = sma_db
+        self.sma_db = sma_db.handler
         self.cross_db = cross_db.handler
 
     @property
     def cross_info(self) -> Dict:
-        return json.loads(self.cross_db.get(ticker))
+        return json.loads(self.cross_db.get(self.ticker))
 
     @property
     def sma_info(self) -> Dict:
-        data = self.sma_db.get_days_back(ticker, 1)
-        return data.to_dict("records")[0]
+        data = self.sma_db.get_days_back(self.ticker, 1)
+        try:
+            return data.to_dict("records")[0]
+        except IndexError:
+            return {ColumnController.date.value: None}
 
     def check_sma_cross(self) -> Tuple[datetime.date, str, str]:
 
@@ -43,8 +49,20 @@ class SMACross:
 
         # last_cross_up_dt = str_to_dt(self.cross_info["last_cross_up"])
         # last_cross_down_dt = str_to_dt(self.cross_info["last_cross_down"])
+        date = self.sma_info[ColumnController.date.value]
+        if date:
+            signal = random.choice(
+                [
+                    StockStatusController.buy,
+                    StockStatusController.sell,
+                    StockStatusController.hold,
+                    StockStatusController.wait,
+                ]
+            )
+        else:
+            signal = StockStatusController.wait
 
-        print("doing sma...")
+        return TradeEvent(date=date, ticker=self.ticker, signal=signal)
         # Steps
         # Which date in
 
