@@ -225,9 +225,9 @@ def get_existing_ticker_data(
         end_date = datetime.today()
         end_date_str = end_date.strftime(DATE_FORMAT)
 
-        if end_date.weekday() in [5, 6]:
-            # make a custom exception here
-            sys.exit(f"{end_date_str} is a weekend! No run run today boo boo...")
+        # if end_date.weekday() in [5, 6]:
+        #     # make a custom exception here
+        #     sys.exit(f"{end_date_str} is a weekend! No run run today boo boo...")
 
         print(f"Last date entry for {ticker}: {last_date_entry_str}")
         print(f"Pulling {ticker} from {query_date_str} to {end_date_str}")
