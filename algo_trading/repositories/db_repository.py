@@ -1,5 +1,6 @@
 from typing import Dict, List, Optional, Union
 from abc import ABC, abstractmethod, abstractproperty
+from pydantic import validate_arguments
 
 
 import pandas as pd
@@ -215,6 +216,7 @@ class DBRepository:
         DBHandlerController.postgres: PostgresRepository,
     }
 
+    @validate_arguments(config=dict(arbitrary_types_allowed=True))
     def __init__(
         self, db_info: Union[Dict, pd.DataFrame], db_handler: DBHandlerController
     ) -> None:

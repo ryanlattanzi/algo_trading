@@ -2,6 +2,7 @@ from abc import ABC, abstractmethod, abstractproperty
 from typing import Any, Dict, Union, Optional
 import redis
 import json
+from pydantic import validate_arguments
 
 from algo_trading.config.controllers import KeyValueController
 
@@ -87,6 +88,7 @@ class KeyValueRepository:
         KeyValueController.redis: RedisRepository,
     }
 
+    @validate_arguments(config=dict(arbitrary_types_allowed=True))
     def __init__(self, kv_info: Dict, kv_handler: KeyValueController) -> None:
         """A wrapper class to provide a consistent interface to the
         different KeyValueRepository types found in the _kv_handlers class

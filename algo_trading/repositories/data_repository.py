@@ -4,6 +4,7 @@ import sys
 from typing import Dict
 from urllib.error import HTTPError
 import ssl
+from pydantic import validate_arguments
 
 import pandas as pd
 from dateutil.parser import parse
@@ -82,6 +83,7 @@ class DataRepository:
         DataHandlerController.yahoo_finance: YahooFinanceDataRepository,
     }
 
+    @validate_arguments(config=dict(arbitrary_types_allowed=True))
     def __init__(self, data_info: Dict, data_handler: DataHandlerController) -> None:
         """A wrapper class to provide a consistent interface to the
         different DataRepository types found in the _data_handlers class

@@ -7,6 +7,7 @@ from typing import Dict, List
 import pandas as pd
 import yaml as yl
 
+from algo_trading.logger.default_logger import main_logger
 from algo_trading.utils.calculations import Calculator
 from algo_trading.repositories.data_repository import DataRepository
 from algo_trading.repositories.db_repository import DBRepository
@@ -27,6 +28,11 @@ we will slap them on the Airflow metastore.
 
 TODO: Create a Logging mechanism
 """
+
+log = main_logger(
+    "sma_cross_dag",
+    f"sma_cross_dag_{dt_to_str(datetime.today())}.log",
+)
 
 
 def create_new_tables(db_info: Dict, db_handler: str, tickers: List) -> List:
@@ -158,7 +164,7 @@ def backfill_redis(
         current_data = kv.get(ticker)
         if current_data is not None:
             # raise ValueError(f"Redis data for {ticker} already exists bum!")
-            print(
+            log.info(
                 f"Redis data for {ticker} already exists bum! - resetting to empty..."
             )
         current_data = dict()
@@ -191,7 +197,7 @@ def backfill_redis(
             ] = StockStatusController.sell.value
 
         kv.set(ticker, current_data)
-        print(f"Updated Redis for {ticker}: {json.dumps(current_data, indent=2)}")
+        log.info(f"Updated Redis for {ticker}: {json.dumps(current_data, indent=2)}")
 
 
 def get_existing_ticker_data(
@@ -229,8 +235,8 @@ def get_existing_ticker_data(
             # make a custom exception here
             sys.exit(f"{end_date_str} is a weekend! No run run today boo boo...")
 
-        print(f"Last date entry for {ticker}: {last_date_entry_str}")
-        print(f"Pulling {ticker} from {query_date_str} to {end_date_str}")
+        log.info(f"Last date entry for {ticker}: {last_date_entry_str}")
+        log.info(f"Pulling {ticker} from {query_date_str} to {end_date_str}")
 
         data_pull_params = {
             "ticker": ticker,
@@ -253,7 +259,7 @@ def get_existing_ticker_data(
                 f"First date of stock_df is less than query date: {query_date_str}"
             )
 
-        print(
+        log.info(
             f"Adding {ticker} data for dates "
             + f"{stock_df[ColumnController.date.value].iloc[0]}"
             + f" -> {stock_df[ColumnController.date.value].iloc[-1]}"
@@ -319,7 +325,7 @@ def update_redis(
             raise ValueError(f"No Redis data for ticker {ticker}...")
 
         current_data = json.loads(current_data)
-        print(f"Current Redis for {ticker}: {json.dumps(current_data, indent=2)}")
+        log.info(f"Current Redis for {ticker}: {json.dumps(current_data, indent=2)}")
 
         if cross_up(data, 0):
             current_data[ColumnController.last_cross_up.value] = dt_to_str(
@@ -335,7 +341,7 @@ def update_redis(
                 )
 
         kv.set(ticker, current_data)
-        print(f"Updated Redis for {ticker}: {json.dumps(current_data, indent=2)}")
+        log.info(f"Updated Redis for {ticker}: {json.dumps(current_data, indent=2)}")
 
 
 if __name__ == "__main__":
