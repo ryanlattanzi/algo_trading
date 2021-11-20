@@ -327,6 +327,7 @@ def update_redis(
             )
 
         elif cross_down(data, 0):
+            # Checks the case when we had a cross up in bear market
             if str_to_dt(
                 current_data[ColumnController.last_cross_down.value]
             ) < str_to_dt(current_data[ColumnController.last_cross_up.value]):
