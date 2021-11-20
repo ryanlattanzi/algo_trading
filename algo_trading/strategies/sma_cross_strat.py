@@ -38,7 +38,6 @@ class SMACross(AbstractStrategy):
 
     @property
     def sma_info(self) -> Dict:
-        data = self.sma_db.get_days_back(self.ticker, 1)
         try:
             data = data.to_dict("records")[0]
         except IndexError:
@@ -52,7 +51,6 @@ class SMACross(AbstractStrategy):
         print("Success")
 
     def run(self) -> Tuple[datetime.date, str, str]:
-
         last_cross_up_int = str_to_dt(
             self.cross_info[ColumnController.last_cross_up.value]
         )

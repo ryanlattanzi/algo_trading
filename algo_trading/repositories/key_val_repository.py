@@ -3,6 +3,8 @@ from typing import Any, Dict, Union, Optional
 import redis
 import json
 
+from pydantic import validate_arguments
+
 from algo_trading.config.controllers import KeyValueController
 
 # things to add to redis
@@ -75,6 +77,8 @@ class FakeKeyValueRepository(AbstractKeyValueRepository):
         self.data = data
 
     def set(self, key: str, value: Union[str, Dict]):
+        if type(value) == dict:
+            value = json.dumps(value)
         self.data[key] = value
 
     def get(self, key: str) -> Optional[str]:
@@ -87,6 +91,7 @@ class KeyValueRepository:
         KeyValueController.redis: RedisRepository,
     }
 
+    @validate_arguments(config=dict(arbitrary_types_allowed=True))
     def __init__(self, kv_info: Dict, kv_handler: KeyValueController) -> None:
         """A wrapper class to provide a consistent interface to the
         different KeyValueRepository types found in the _kv_handlers class
