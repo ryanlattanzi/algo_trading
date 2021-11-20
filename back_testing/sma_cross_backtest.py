@@ -45,10 +45,10 @@ def cross_up(data: pd.DataFrame, index: int) -> bool:
             data[ColumnController.ma_7.value].iloc[index - 1]
             < data[ColumnController.ma_21.value].iloc[index - 1]
         )
-        and (
-            data[ColumnController.close.value].iloc[index]
-            > data[ColumnController.ma_50.value].iloc[index]
-        )
+        # and (
+        #     data[ColumnController.close.value].iloc[index]
+        #     > data[ColumnController.ma_50.value].iloc[index]
+        # )
     )
 
 
@@ -261,6 +261,7 @@ class SMACrossBackTester:
         sma = SMACross(self.ticker, fake_db_repo, fake_kv_repo)
         starting_cap = self.capital
         num_shares = 0
+        num_trades = 0
         if init_status == StockStatusController.buy.value:
             num_shares = self._get_num_shares(
                 self.capital, self.price_data[ColumnController.close.value].iloc[0]
@@ -301,6 +302,7 @@ class SMACrossBackTester:
                     num_shares = self._get_num_shares(
                         self.capital, row[ColumnController.close.value]
                     )
+                    num_trades += 1
                     print(
                         f"Bought {num_shares} shares at price {row[ColumnController.close.value]} "
                         + f"on {row[ColumnController.date.value]}."
@@ -309,6 +311,7 @@ class SMACrossBackTester:
                     self.capital = self._get_new_capital(
                         num_shares, row[ColumnController.close.value]
                     )
+                    num_trades += 1
                     print(
                         f"Sold {num_shares} shares at price "
                         + f"{row[ColumnController.close.value]} on "
@@ -329,6 +332,7 @@ class SMACrossBackTester:
         percent_change = self._get_percent_change(starting_cap, self.capital)
         print(f"Starting cap: {starting_cap}, final cap: {self.capital}.")
         print(f"Change over {self.period.value} is {percent_change} %.")
+        print(f"Number of trades: {num_trades}")
 
 
 if __name__ == "__main__":
@@ -336,6 +340,6 @@ if __name__ == "__main__":
 
     ticker = "aapl"
     tester = SMACrossBackTester(
-        ticker, DB_INFO, DBHandlerController.postgres, "1yr", capital=1000
+        ticker, DB_INFO, DBHandlerController.postgres, "max", capital=1000
     )
     tester.test()

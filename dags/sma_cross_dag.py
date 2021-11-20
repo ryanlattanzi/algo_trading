@@ -99,10 +99,10 @@ def cross_up(data: pd.DataFrame, index: int) -> bool:
             data[ColumnController.ma_7.value].iloc[index + 1]
             < data[ColumnController.ma_21.value].iloc[index + 1]
         )
-        and (
-            data[ColumnController.close.value].iloc[index]
-            > data[ColumnController.ma_50.value].iloc[index]
-        )
+        # and (
+        #     data[ColumnController.close.value].iloc[index]
+        #     > data[ColumnController.ma_50.value].iloc[index]
+        # )
     )
 
 
