@@ -5,6 +5,7 @@ from abc import ABC, abstractmethod, abstractproperty
 import pandas as pd
 import sqlalchemy as sa
 from sqlalchemy.engine.base import Engine
+from pydantic import validate_arguments
 
 from algo_trading.config.controllers import ColumnController, DBHandlerController
 from algo_trading.utils.utils import dt_to_str
@@ -126,6 +127,7 @@ class FakeDBRepository(AbstractDBRepository):
             start_idx = 0
         else:
             start_idx = self.idx_iterator - days_back
+
         data = self.data.iloc[start_idx : (self.idx_iterator)]
         self.idx_iterator += 1
         return data
@@ -215,6 +217,7 @@ class DBRepository:
         DBHandlerController.postgres: PostgresRepository,
     }
 
+    # @validate_arguments(config=dict(arbitrary_types_allowed=True))
     def __init__(
         self, db_info: Union[Dict, pd.DataFrame], db_handler: DBHandlerController
     ) -> None:

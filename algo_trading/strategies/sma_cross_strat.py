@@ -7,6 +7,7 @@ import random
 
 from datetime import datetime, timedelta
 
+from algo_trading.strategies.abstract_strategy import AbstractStrategy
 from algo_trading.strategies.events import TradeEvent
 from algo_trading.config.controllers import ColumnController, StockStatusController
 from algo_trading.repositories.db_repository import DBRepository
@@ -19,7 +20,7 @@ from algo_trading.utils.utils import str_to_dt
 """
 
 
-class SMACross:
+class SMACross(AbstractStrategy):
     def __init__(
         self,
         ticker: str,
@@ -37,34 +38,64 @@ class SMACross:
 
     @property
     def sma_info(self) -> Dict:
-        data = self.sma_db.get_days_back(self.ticker, 1)
         try:
-            return data.to_dict("records")[0]
-        except IndexError:
-            return {ColumnController.date.value: None}
+            return self._sma_info
+        except AttributeError:
+            data = self.sma_db.get_days_back(self.ticker, 1)
+            print(data)
+            try:
+                self._sma_info = data.to_dict("records")[0]
+            except IndexError:
+                self._sma_info = {ColumnController.date.value: None}
+            return self._sma_info
 
-    def check_sma_cross(self) -> Tuple[datetime.date, str, str]:
+    def _update_last_status(self, signal: StockStatusController) -> None:
+        current = self.cross_info
+        current[ColumnController.last_status.value] = signal.value
+        self.cross_db.set(self.ticker, current)
+        print("Success")
 
-        buffer = 1.0
+    def run(self) -> Tuple[datetime.date, str, str]:
+        # Converts str date into datetime
+        print(self.sma_info)
+        last_cross_up_int = str_to_dt(
+            self.cross_info[ColumnController.last_cross_up.value]
+        )
+        last_cross_down_int = str_to_dt(
+            self.cross_info[ColumnController.last_cross_down.value]
+        )
+        last_status = self.cross_info[ColumnController.last_status.value]
+        # print(last_cross_up_int, last_cross_down_int, last_status)
 
-        # last_cross_up_dt = str_to_dt(self.cross_info["last_cross_up"])
-        # last_cross_down_dt = str_to_dt(self.cross_info["last_cross_down"])
-        date = self.sma_info[ColumnController.date.value]
+        date = self.sma_info[ColumnController.date.value]  # Current Date
         if date:
-            signal = random.choice(
-                [
-                    StockStatusController.buy,
-                    StockStatusController.sell,
-                    StockStatusController.hold,
-                    StockStatusController.wait,
-                ]
-            )
+            if last_cross_up_int > last_cross_down_int:
+                if last_status == StockStatusController.buy.value:
+                    signal = StockStatusController.hold
+                # elif last_status == StockStatusController.hold.value:
+                #     signal = StockStatusController.hold
+                # elif last_status == StockStatusController.wait.value:
+                #     signal = StockStatusController.buy
+                elif last_status == StockStatusController.sell.value:
+                    signal = StockStatusController.buy
+                    self._update_last_status(signal)
+            else:
+                if last_status == StockStatusController.buy.value:
+                    signal = StockStatusController.sell
+                    self._update_last_status(signal)
+                # elif last_status == StockStatusController.hold.value:
+                #     signal = StockStatusController.sell
+                # elif last_status == StockStatusController.wait.value:
+                #     signal = StockStatusController.wait
+                elif last_status == StockStatusController.sell.value:
+                    signal = StockStatusController.wait
+                    # print(TradeEvent(date=date, ticker=self.ticker, signal=signal))
         else:
             signal = StockStatusController.wait
 
+        # print(signal)
+
         return TradeEvent(date=date, ticker=self.ticker, signal=signal)
-        # Steps
-        # Which date in
 
 
 if __name__ == "__main__":
