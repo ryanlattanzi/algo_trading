@@ -99,10 +99,10 @@ def cross_up(data: pd.DataFrame, index: int) -> bool:
             data[ColumnController.ma_7.value].iloc[index + 1]
             < data[ColumnController.ma_21.value].iloc[index + 1]
         )
-        and (
-            data[ColumnController.close.value].iloc[index]
-            > data[ColumnController.ma_50.value].iloc[index]
-        )
+        # and (
+        #     data[ColumnController.close.value].iloc[index]
+        #     > data[ColumnController.ma_50.value].iloc[index]
+        # )
     )
 
 
@@ -327,6 +327,7 @@ def update_redis(
             )
 
         elif cross_down(data, 0):
+            # Checks the case when we had a cross up in bear market
             if str_to_dt(
                 current_data[ColumnController.last_cross_down.value]
             ) < str_to_dt(current_data[ColumnController.last_cross_up.value]):
