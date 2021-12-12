@@ -62,27 +62,31 @@ class PostgresQuery(AbstractQuery):
 
     @property
     def get_most_recent_date(self) -> str:
-        return "SELECT DATE FROM %s ORDER BY DATE DESC LIMIT 1"
+        return "SELECT DATE FROM %s ORDER BY DATE DESC LIMIT 1;"
 
     @property
     def get_days_back(self) -> str:
-        return "SELECT * FROM %s ORDER BY DATE DESC LIMIT %s"
+        return """
+            SELECT temp.*
+            FROM (SELECT * FROM %s ORDER BY DATE DESC LIMIT %s) AS temp
+            ORDER BY DATE ASC;
+            """
 
     @property
     def get_since_date(self) -> str:
-        return "SELECT * FROM %s WHERE DATE >= '%s'"
+        return "SELECT * FROM %s WHERE DATE >= '%s' ORDER BY DATE ASC;"
 
     @property
     def get_all(self) -> str:
-        return "SELECT * FROM %s ORDER BY DATE DESC"
+        return "SELECT * FROM %s ORDER BY DATE ASC;"
 
     @property
     def create_table(self) -> str:
-        return "CREATE TABLE IF NOT EXISTS %s (%s)"
+        return "CREATE TABLE IF NOT EXISTS %s (%s);"
 
     @property
     def get_current_tickers(self) -> str:
-        return "SELECT TABLE_NAME FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_SCHEMA = 'public'"
+        return "SELECT TABLE_NAME FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_SCHEMA = 'public';"
 
 
 class AbstractDBRepository(ABC):
@@ -94,22 +98,66 @@ class AbstractDBRepository(ABC):
     """
 
     @abstractmethod
+    def create_new_ticker_tables(self, tickers: List[str]) -> List:
+        """Creates tables for new tickers. Will need to implement
+        logic to find out the newest tickers given the total list
+        of tickers. This can be achieved by querying the DB to see
+        which tables exist.
+
+        Args:
+            tickers (List[str]): Total list of tickers
+
+        Returns:
+            List: List of new tickers.
+        """
+        pass
+
+    @abstractmethod
     def get_days_back(self, ticker: str, days_back: int) -> pd.DataFrame:
+        """Gets days_back rows of price data in ASCENDING order by date.
+
+        Args:
+            ticker (str): Ticker to fetch data.
+            days_back (int): Last n rows to fetch.
+
+        Returns:
+            pd.DataFrame: Price data in ASCENDING order by date.
+        """
         pass
 
     @abstractmethod
     def get_since_date(self, ticker: str, date: str) -> pd.DataFrame:
+        """Gets data since the given date for the ticker. Returns
+        price data in ASCENDING order by date.
+
+        Args:
+            ticker (str): Ticker to fetch data.
+            date (str): Lower bound date from which to grab data.
+
+        Returns:
+            pd.DataFrame: Price data in ASCENDING order by date.
+        """
         pass
 
     @abstractmethod
     def get_all(self, ticker: str) -> pd.DataFrame:
+        """Gets all data for the ticker. Returns price data in
+        ASCENDING order by date.
+
+        Args:
+            ticker (str): Ticker to fetch data.
+
+        Returns:
+            pd.DataFrame: Price data in ASCENDING order by date.
+        """
         pass
 
 
 class FakeDBRepository(AbstractDBRepository):
     def __init__(self, data: pd.DataFrame) -> None:
         """Fake DB repo that accepts data as a DF to act as
-        the table in the live price DB.
+        the table in the live price DB. The DF is in ASCENDING
+        order by date.
 
         We add the idx_iterator because we assume that you
         are using this for a test and want to iterate through
@@ -121,6 +169,9 @@ class FakeDBRepository(AbstractDBRepository):
         self.data = data
 
         self.idx_iterator = 0
+
+    def create_new_ticker_tables(self, tickers: List[str]) -> List:
+        pass
 
     def get_days_back(self, ticker: str, days_back: int) -> pd.DataFrame:
         if (self.idx_iterator - days_back) < 0:
@@ -216,6 +267,9 @@ class DBRepository:
         DBHandlerController.fake: FakeDBRepository,
         DBHandlerController.postgres: PostgresRepository,
     }
+
+    # For some reason, validate_arguments is casting the pandas DF used
+    # as an arg in the FakeDBRepository to a dict, so we leave it out here.
 
     # @validate_arguments(config=dict(arbitrary_types_allowed=True))
     def __init__(
