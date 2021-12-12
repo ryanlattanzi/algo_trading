@@ -1,6 +1,6 @@
-from typing import Tuple, Dict
+from typing import Dict
 import json
-from datetime import datetime
+import pandas as pd
 
 from algo_trading.strategies.abstract_strategy import AbstractStrategy
 from algo_trading.strategies.events import TradeEvent
@@ -35,16 +35,83 @@ class SMACross(AbstractStrategy):
             data = {ColumnController.date.value: None}
         return data
 
+    @staticmethod
+    def cross_up(data: pd.DataFrame, index: int) -> bool:
+        """Checks to see if a cross up occured by looking at
+        the current date 7 and 21 day SMA and the previous date
+        7 and 21 day SMA. Finally, we only consider cross up
+        when the close price > 50 ay SMA otherwise the market
+        is considered bearish.
+
+        **NOTE**
+        We expect the dataframe to be in ASCENDING order by date.
+
+        Args:
+            data (pd.DataFrame): Data to parse SMA info.
+            index (int): Indicates current day. index + 1 = prev day.
+
+        Returns:
+            bool: True if all conditions are met.
+        """
+        return (
+            (
+                data[ColumnController.ma_7.value].iloc[index]
+                >= data[ColumnController.ma_21.value].iloc[index]
+            )
+            and (
+                data[ColumnController.ma_7.value].iloc[index - 1]
+                < data[ColumnController.ma_21.value].iloc[index - 1]
+            )
+            and (
+                data[ColumnController.close.value].iloc[index]
+                > data[ColumnController.ma_50.value].iloc[index]
+            )
+        )
+
+    @staticmethod
+    def cross_down(data: pd.DataFrame, index: int) -> bool:
+        """Checks to see if a cross down occured by looking at
+        the current date 7 and 21 day SMA and the previous date
+        7 and 21 day SMA.
+
+        **NOTE**
+        We expect the dataframe to be in ASCENDING order by date.
+
+        Args:
+            data (pd.DataFrame): Data to parse SMA info.
+            index (int): Indicates current day. index + 1 = prev day.
+
+        Returns:
+            bool: True if all conditions are met.
+        """
+        return (
+            data[ColumnController.ma_7.value].iloc[index]
+            < data[ColumnController.ma_21.value].iloc[index]
+        ) and (
+            data[ColumnController.ma_7.value].iloc[index - 1]
+            >= data[ColumnController.ma_21.value].iloc[index - 1]
+        )
+
     def _update_last_status(self, signal: StockStatusController) -> None:
+        """Updates the ast_status value to the given signal for the
+        Key Value store.
+
+        Args:
+            signal (StockStatusController): Enumeration signal.
+        """
         current = self.cross_info
         current[ColumnController.last_status.value] = signal.value
         self.cross_db.set(self.ticker, current)
 
-    def run(self) -> Tuple[datetime.date, str, str]:
-        last_cross_up_int = str_to_dt(
-            self.cross_info[ColumnController.last_cross_up.value]
-        )
-        last_cross_down_int = str_to_dt(
+    def run(self) -> TradeEvent:
+        """Runs the SMACross strategy logic based on the last cross up/down
+        in the Key Value store.
+
+        Returns:
+            TradeEvent: Event
+        """
+        last_cross_up = str_to_dt(self.cross_info[ColumnController.last_cross_up.value])
+        last_cross_down = str_to_dt(
             self.cross_info[ColumnController.last_cross_down.value]
         )
         last_status = self.cross_info[ColumnController.last_status.value]
@@ -52,13 +119,9 @@ class SMACross(AbstractStrategy):
         date = self.sma_info[ColumnController.date.value]
 
         if date:
-            if last_cross_up_int > last_cross_down_int:
+            if last_cross_up > last_cross_down:
                 if last_status == StockStatusController.buy.value:
                     signal = StockStatusController.hold
-                # elif last_status == StockStatusController.hold.value:
-                #     signal = StockStatusController.hold
-                # elif last_status == StockStatusController.wait.value:
-                #     signal = StockStatusController.buy
                 elif last_status == StockStatusController.sell.value:
                     signal = StockStatusController.buy
                     self._update_last_status(signal)
@@ -66,10 +129,6 @@ class SMACross(AbstractStrategy):
                 if last_status == StockStatusController.buy.value:
                     signal = StockStatusController.sell
                     self._update_last_status(signal)
-                # elif last_status == StockStatusController.hold.value:
-                #     signal = StockStatusController.sell
-                # elif last_status == StockStatusController.wait.value:
-                #     signal = StockStatusController.wait
                 elif last_status == StockStatusController.sell.value:
                     signal = StockStatusController.wait
 

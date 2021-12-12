@@ -2,7 +2,8 @@ db_repo: postgres
 data_repo: yahoo_finance
 kv_repo: redis
 ticker_list:
-  - nio
+  - aapl
+#  - nio
 #  - fb
 #  - tsla
 #  - msft
