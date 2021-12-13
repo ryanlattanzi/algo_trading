@@ -4,6 +4,8 @@ import redis
 import json
 from pydantic import validate_arguments
 
+from pydantic import validate_arguments
+
 from algo_trading.config.controllers import KeyValueController
 
 # things to add to redis
@@ -76,6 +78,8 @@ class FakeKeyValueRepository(AbstractKeyValueRepository):
         self.data = data
 
     def set(self, key: str, value: Union[str, Dict]):
+        if type(value) == dict:
+            value = json.dumps(value)
         self.data[key] = value
 
     def get(self, key: str) -> Optional[str]:

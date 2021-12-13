@@ -1,7 +1,10 @@
+from datetime import timedelta
+import json
 from typing import Dict, Optional, Union
 import pandas as pd
 from pydantic import validate_arguments
 
+from algo_trading.utils.utils import dt_to_str
 from algo_trading.strategies.sma_cross_strat import SMACross
 from algo_trading.repositories.db_repository import AbstractDBRepository, DBRepository
 from algo_trading.repositories.key_val_repository import KeyValueRepository
@@ -13,8 +16,6 @@ from algo_trading.config.controllers import (
 )
 from algo_trading.utils.utils import str_to_dt
 from algo_trading.strategies.events import TradeEvent
-
-from dags.sma_cross_dag import update_redis
 
 from controllers import TestPeriodController
 
@@ -109,15 +110,48 @@ class SMACrossBackTester:
         except AttributeError:
             if self.period:
                 if self.period == TestPeriodController.max:
-                    data = self.db_repo.get_all(self.ticker)
+                    self._price_data = self.db_repo.get_all(self.ticker)
                 else:
-                    data = self.db_repo.get_days_back(self.ticker, self.days_back)
+                    self._price_data = self.db_repo.get_days_back(
+                        self.ticker, self.days_back
+                    )
             elif self.start_date:
-                data = self.db_repo.get_since_date(self.ticker, self.start_date)
-            self._price_data = data.sort_values(
-                [ColumnController.date.value], ascending=True
-            ).iloc[1:]
+                self._price_data = self.db_repo.get_since_date(
+                    self.ticker, self.start_date
+                )
             return self._price_data
+
+    def _init_fake_key_value(self) -> Dict:
+        first_day = self.price_data.iloc[0].to_dict()
+        if (
+            first_day[ColumnController.ma_7.value]
+            > first_day[ColumnController.ma_21.value]
+        ):
+            last_cross_up = dt_to_str(
+                first_day[ColumnController.date.value] - timedelta(days=1)
+            )
+            last_cross_down = dt_to_str(
+                first_day[ColumnController.date.value] - timedelta(days=2)
+            )
+            last_status = StockStatusController.buy.value
+        else:
+            last_cross_up = dt_to_str(
+                first_day[ColumnController.date.value] - timedelta(days=2)
+            )
+            last_cross_down = dt_to_str(
+                first_day[ColumnController.date.value] - timedelta(days=1)
+            )
+            last_status = StockStatusController.sell.value
+
+        return last_status, {
+            self.ticker: json.dumps(
+                {
+                    ColumnController.last_cross_up.value: last_cross_up,
+                    ColumnController.last_cross_down.value: last_cross_down,
+                    ColumnController.last_status.value: last_status,
+                }
+            )
+        }
 
     def _get_num_shares(self, cash: float, share_price: float) -> float:
         """Simple calculation of num shares to buy.
@@ -166,61 +200,107 @@ class SMACrossBackTester:
         Calculates percent gain/loss after
         """
         fake_db_repo = DBRepository(self.price_data, DBHandlerController.fake)
+        init_status, init_kv = self._init_fake_key_value()
         fake_kv_repo = KeyValueRepository(
-            kv_info={
-                ColumnController.last_cross_up.value: None,
-                ColumnController.last_cross_down.value: None,
-                ColumnController.last_status.value: StockStatusController.wait.value,
-            },
+            kv_info=init_kv,
             kv_handler=KeyValueController.fake,
         )
 
         sma = SMACross(self.ticker, fake_db_repo, fake_kv_repo)
         starting_cap = self.capital
-        num_shares = 0
-        state = "sell"
+        num_trades = 0
+        if init_status == StockStatusController.buy.value:
+            num_shares = self._get_num_shares(
+                self.capital, self.price_data[ColumnController.close.value].iloc[0]
+            )
+            init_message = f"{num_shares} shares"
+        else:
+            num_shares = 0
+            init_message = f"${self.capital}"
+
+        print("\n*******************************************************")
+        print(
+            f"Beginning SMA Cross strategy with {init_message} at price "
+            + f"{self.price_data[ColumnController.close.value].iloc[0]} on "
+            + f"{self.price_data[ColumnController.date.value].iloc[0]}"
+        )
+        print("*******************************************************\n")
+
         for idx, row in self.price_data.iterrows():
-            result: TradeEvent = sma.check_sma_cross()
-            if result.signal == StockStatusController.buy:
-                if state == "sell":
+            if idx == 0:
+                # Skip the first day.
+                continue
+            else:
+
+                # Current key/val store for self.ticker
+                curr = json.loads(fake_kv_repo.handler.get(self.ticker))
+
+                if SMACross.cross_up(self.price_data[: (idx + 1)], idx):
+                    curr[ColumnController.last_cross_up.value] = dt_to_str(
+                        self.price_data[ColumnController.date.value].iloc[idx]
+                    )
+                    fake_kv_repo.handler.set(self.ticker, curr)
+
+                elif SMACross.cross_down(self.price_data[: (idx + 1)], idx):
+                    # Checks the case when we had a cross up in bear market
+                    if str_to_dt(
+                        curr[ColumnController.last_cross_down.value]
+                    ) < str_to_dt(curr[ColumnController.last_cross_up.value]):
+
+                        curr[ColumnController.last_cross_down.value] = dt_to_str(
+                            self.price_data[ColumnController.date.value].iloc[idx]
+                        )
+                        fake_kv_repo.handler.set(self.ticker, curr)
+
+                result: TradeEvent = sma.run()
+                if result.signal == StockStatusController.buy:
                     num_shares = self._get_num_shares(
                         self.capital, row[ColumnController.close.value]
                     )
+                    num_trades += 1
                     print(
                         f"Bought {num_shares} shares at price {row[ColumnController.close.value]} "
                         + f"on {row[ColumnController.date.value]}."
                     )
-                    state = "buy"
-            elif result.signal == StockStatusController.sell:
-                if state == "buy":
+                elif result.signal == StockStatusController.sell:
                     self.capital = self._get_new_capital(
                         num_shares, row[ColumnController.close.value]
                     )
+                    num_trades += 1
                     print(
                         f"Sold {num_shares} shares at price "
                         + f"{row[ColumnController.close.value]} on "
                         + f"{row[ColumnController.date.value]} for a new capital of {self.capital}."
                     )
                     num_shares = 0
-                    state = "sell"
+
         if num_shares != 0:
             self.capital = self._get_new_capital(
                 num_shares, self.price_data.iloc[-1][ColumnController.close.value]
             )
             print(
-                f"Sold {num_shares} shares at price "
+                f"\nFinished with {num_shares} shares at price "
                 + f"{self.price_data.iloc[-1][ColumnController.close.value]} "
-                + f"on {self.price_data.iloc[-1][ColumnController.date.value]} "
-                + f"for a new capital of {self.capital}."
+                + f"on {self.price_data.iloc[-1][ColumnController.date.value]}."
             )
+            print(f"Selling all for a new capital of {self.capital}.")
         percent_change = self._get_percent_change(starting_cap, self.capital)
-        print(f"Starting cap: {starting_cap}, final cap: {self.capital}.")
-        print(f"Change over {self.period.value} is {percent_change} %.")
+        print(f"Starting cap: {starting_cap}")
+        print(f"Final cap: {self.capital}")
+        print(f"Change over {self.period or self.start_date} is {percent_change} %.")
+        print(f"Number of trades: {num_trades}")
 
 
 if __name__ == "__main__":
-    from algo_trading.constants import DB_INFO
+    from algo_trading.config import DB_INFO
 
     ticker = "aapl"
-    tester = SMACrossBackTester(ticker, DB_INFO, "postgres", "max", capital=1000)
+    tester = SMACrossBackTester(
+        ticker=ticker,
+        db_info=DB_INFO,
+        db_handler=DBHandlerController.postgres,
+        # period="3mo",
+        start_date="2020-01-01",
+        capital=1000,
+    )
     tester.test()

@@ -7,6 +7,7 @@ import ssl
 from pydantic import validate_arguments
 
 import pandas as pd
+from pydantic import validate_arguments
 from dateutil.parser import parse
 
 from algo_trading.config.controllers import DataHandlerController

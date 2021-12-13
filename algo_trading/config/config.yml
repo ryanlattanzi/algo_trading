@@ -3,6 +3,7 @@ data_repo: yahoo_finance
 kv_repo: redis
 ticker_list:
   - aapl
+#  - nio
 #  - fb
 #  - tsla
 #  - msft
