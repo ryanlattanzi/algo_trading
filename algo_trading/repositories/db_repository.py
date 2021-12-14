@@ -12,8 +12,6 @@ from algo_trading.logger.default_logger import child_logger
 from algo_trading.config.controllers import ColumnController, DBHandlerController
 from algo_trading.utils.utils import dt_to_str
 
-LOG_NAME = __name__
-
 
 class AbstractQuery(ABC):
     @abstractproperty
@@ -212,7 +210,7 @@ class PostgresRepository(AbstractDBRepository):
         try:
             return self._log
         except AttributeError:
-            self._log = child_logger(self.log_info["name"], LOG_NAME)
+            self._log = child_logger(self.log_info["name"], self.__class__.__name__)
             return self._log
 
     @property

@@ -135,7 +135,7 @@ def get_existing_ticker_data(
         #     # make a custom exception here
         #     sys.exit(f"{end_date_str} is a weekend! No run run today boo boo...")
 
-        LOG.info(f"Last date entry for {ticker}: {last_date_entry_str}")
+        LOG.info(f"\nLast date entry for {ticker}: {last_date_entry_str}")
         LOG.info(f"Pulling {ticker} from {query_date_str} to {end_date_str}")
 
         data_pull_params = {
