@@ -1,10 +1,11 @@
 import os
 import json
 from typing import Dict, List
-
+from datetime import datetime
 import pandas as pd
 import yaml as yl
 
+from algo_trading.logger.default_logger import main_logger
 from algo_trading.strategies.sma_cross_strat import SMACross
 from algo_trading.repositories.db_repository import DBRepository
 from algo_trading.repositories.key_val_repository import KeyValueRepository
@@ -25,6 +26,16 @@ we will slap them on the Airflow metastore.
 TODO: Create a Logging mechanism
 """
 
+LOG_INFO = {
+    "name": "sma_cross_dag",
+    "file": os.path.join("logs", f"sma_cross_dag_{dt_to_str(datetime.today())}.log"),
+}
+
+LOG = main_logger(
+    LOG_INFO["name"],
+    LOG_INFO["file"],
+)
+
 # HOW TO GET THE NEW TICKERS AND OLD TICKERS PASSED FROM DATA_PULL_DAG HERE?
 
 
@@ -41,7 +52,7 @@ def backfill_redis(
     for ticker, data in new_ticker_data.items():
         cross_info = kv.get(ticker)
         if cross_info is not None:
-            print(
+            LOG.info(
                 f"Redis data for {ticker} already exists bum! - resetting to empty..."
             )
         cross_info = dict()
@@ -76,7 +87,7 @@ def backfill_redis(
             ] = StockStatusController.sell.value
 
         kv.set(ticker, cross_info)
-        print(f"Updated Redis for {ticker}: {json.dumps(cross_info, indent=2)}")
+        LOG.info(f"Updated Redis for {ticker}: {json.dumps(cross_info, indent=2)}")
 
 
 def update_redis(
@@ -108,7 +119,7 @@ def update_redis(
             raise ValueError(f"No Redis data for ticker {ticker}...")
 
         cross_info = json.loads(cross_info)
-        print(f"Current Redis for {ticker}: {json.dumps(cross_info, indent=2)}")
+        LOG.info(f"Current Redis for {ticker}: {json.dumps(cross_info, indent=2)}")
 
         if SMACross.cross_up(data, 0):
             cross_info[ColumnController.last_cross_up.value] = dt_to_str(
@@ -125,7 +136,7 @@ def update_redis(
                 )
 
         kv.set(ticker, cross_info)
-        print(f"Updated Redis for {ticker}: {json.dumps(cross_info, indent=2)}")
+        LOG.info(f"Updated Redis for {ticker}: {json.dumps(cross_info, indent=2)}")
 
 
 if __name__ == "__main__":
@@ -141,6 +152,8 @@ if __name__ == "__main__":
     data_handler = config["data_repo"]
     kv_handler = config["kv_repo"]
 
-    backfill_redis(KV_INFO, kv_handler, new_ticker_data)
+    LOG.info("testing from sma")
 
-    update_redis(DB_INFO, db_handler, KV_INFO, kv_handler, tickers, new_tickers)
+    # backfill_redis(KV_INFO, kv_handler, new_ticker_data)
+
+    # update_redis(DB_INFO, db_handler, KV_INFO, kv_handler, tickers, new_tickers)

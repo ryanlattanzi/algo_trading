@@ -6,6 +6,8 @@
 /token/
 .idea/
 .vscode/
+dags/logs/
+back_testing/logs/
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

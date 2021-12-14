@@ -1,12 +1,14 @@
-from typing import Dict, List, Optional, Union
+from typing import Dict, List, Union
 from abc import ABC, abstractmethod, abstractproperty
-
+from pydantic import validate_arguments
+from logging import Logger
 
 import pandas as pd
 import sqlalchemy as sa
 from sqlalchemy.engine.base import Engine
 from pydantic import validate_arguments
 
+from algo_trading.logger.default_logger import child_logger
 from algo_trading.config.controllers import ColumnController, DBHandlerController
 from algo_trading.utils.utils import dt_to_str
 
@@ -154,7 +156,7 @@ class AbstractDBRepository(ABC):
 
 
 class FakeDBRepository(AbstractDBRepository):
-    def __init__(self, data: pd.DataFrame) -> None:
+    def __init__(self, data: pd.DataFrame, log_info: Dict) -> None:
         """Fake DB repo that accepts data as a DF to act as
         the table in the live price DB. The DF is in ASCENDING
         order by date.
@@ -167,6 +169,7 @@ class FakeDBRepository(AbstractDBRepository):
             data (pd.DataFrame): Data to 'query' from.
         """
         self.data = data
+        self.log_info = log_info
 
         self.idx_iterator = 0
 
@@ -191,7 +194,7 @@ class FakeDBRepository(AbstractDBRepository):
 
 
 class PostgresRepository(AbstractDBRepository):
-    def __init__(self, db_info: Dict) -> None:
+    def __init__(self, db_info: Dict, log_info: Dict) -> None:
         """DB Repository that taps into a Postgres instance.
         There are a few added methods to the raw AbstractDBRepository
         to handle some business scenarios.
@@ -200,6 +203,15 @@ class PostgresRepository(AbstractDBRepository):
             db_info (Dict): DB connection information.
         """
         self.db_info = db_info
+        self.log_info = log_info
+
+    @property
+    def log(self) -> Logger:
+        try:
+            return self._log
+        except AttributeError:
+            self._log = child_logger(self.log_info["name"], self.__class__.__name__)
+            return self._log
 
     @property
     def queries(self) -> AbstractQuery:
@@ -218,7 +230,7 @@ class PostgresRepository(AbstractDBRepository):
             return self._db_engine
 
     def _create_table(self, ticker: str) -> None:
-        print(f"Creating table {ticker}")
+        self.log.info(f"Creating table {ticker}")
         col_str = ", ".join(
             [f"{k} {v}" for k, v in ColumnController.db_columns().items()]
         )
@@ -234,13 +246,13 @@ class PostgresRepository(AbstractDBRepository):
 
     def create_new_ticker_tables(self, tickers: List[str]) -> List:
         new_tickers = self._get_new_tickers(tickers)
-        print(f"Processing {len(new_tickers)} new ticker(s).")
+        self.log.info(f"Processing {len(new_tickers)} new ticker(s).")
         for ticker in new_tickers:
             self._create_table(ticker)
         return new_tickers
 
     def append_df_to_sql(self, ticker: str, df: pd.DataFrame) -> None:
-        print(f"Adding {len(df)} rows to {ticker}.")
+        self.log.info(f"Adding {len(df)} rows to {ticker}.")
         df.to_sql(ticker, con=self.db_engine, if_exists="append", index=False)
 
     def get_most_recent_date(self, ticker: str) -> str:
@@ -273,7 +285,10 @@ class DBRepository:
 
     # @validate_arguments(config=dict(arbitrary_types_allowed=True))
     def __init__(
-        self, db_info: Union[Dict, pd.DataFrame], db_handler: DBHandlerController
+        self,
+        db_info: Union[Dict, pd.DataFrame],
+        db_handler: DBHandlerController,
+        log_info: Dict,
     ) -> None:
         """A wrapper class to provide a consistent interface to the
         different DBRepository types found in the _db_handlers class
@@ -285,7 +300,8 @@ class DBRepository:
         """
         self.db_info = db_info
         self.db_handler = db_handler
+        self.log_info = log_info
 
     @property
     def handler(self) -> AbstractDBRepository:
-        return DBRepository._db_handlers[self.db_handler](self.db_info)
+        return DBRepository._db_handlers[self.db_handler](self.db_info, self.log_info)

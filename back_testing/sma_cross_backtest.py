@@ -1,9 +1,11 @@
-from datetime import timedelta
+from datetime import timedelta, datetime
+import os
 import json
 from typing import Dict, Optional, Union
 import pandas as pd
 from pydantic import validate_arguments
 
+from algo_trading.logger.default_logger import main_logger
 from algo_trading.utils.utils import dt_to_str
 from algo_trading.strategies.sma_cross_strat import SMACross
 from algo_trading.repositories.db_repository import AbstractDBRepository, DBRepository
@@ -18,6 +20,16 @@ from algo_trading.utils.utils import str_to_dt
 from algo_trading.strategies.events import TradeEvent
 
 from controllers import TestPeriodController
+
+LOG_INFO = {
+    "name": "SMA_backtest",
+    "file": os.path.join("logs", f"SMA_backtest_{dt_to_str(datetime.today())}.log"),
+}
+
+LOG = main_logger(
+    LOG_INFO["name"],
+    LOG_INFO["file"],
+)
 
 
 class SMACrossBackTester:
@@ -93,7 +105,11 @@ class SMACrossBackTester:
         try:
             return self._db_repo
         except AttributeError:
-            self._db_repo = DBRepository(self.db_info, self.db_handler).handler
+            self._db_repo = DBRepository(
+                self.db_info,
+                self.db_handler,
+                LOG_INFO,
+            ).handler
             return self._db_repo
 
     @property
@@ -199,11 +215,16 @@ class SMACrossBackTester:
 
         Calculates percent gain/loss after
         """
-        fake_db_repo = DBRepository(self.price_data, DBHandlerController.fake)
+        fake_db_repo = DBRepository(
+            self.price_data,
+            DBHandlerController.fake,
+            LOG_INFO,
+        )
         init_status, init_kv = self._init_fake_key_value()
         fake_kv_repo = KeyValueRepository(
             kv_info=init_kv,
             kv_handler=KeyValueController.fake,
+            log_info=LOG_INFO,
         )
 
         sma = SMACross(self.ticker, fake_db_repo, fake_kv_repo)
@@ -219,7 +240,7 @@ class SMACrossBackTester:
             init_message = f"${self.capital}"
 
         print("\n*******************************************************")
-        print(
+        LOG.info(
             f"Beginning SMA Cross strategy with {init_message} at price "
             + f"{self.price_data[ColumnController.close.value].iloc[0]} on "
             + f"{self.price_data[ColumnController.date.value].iloc[0]}"
@@ -258,7 +279,7 @@ class SMACrossBackTester:
                         self.capital, row[ColumnController.close.value]
                     )
                     num_trades += 1
-                    print(
+                    LOG.info(
                         f"Bought {num_shares} shares at price {row[ColumnController.close.value]} "
                         + f"on {row[ColumnController.date.value]}."
                     )
@@ -267,7 +288,7 @@ class SMACrossBackTester:
                         num_shares, row[ColumnController.close.value]
                     )
                     num_trades += 1
-                    print(
+                    LOG.info(
                         f"Sold {num_shares} shares at price "
                         + f"{row[ColumnController.close.value]} on "
                         + f"{row[ColumnController.date.value]} for a new capital of {self.capital}."
@@ -278,17 +299,17 @@ class SMACrossBackTester:
             self.capital = self._get_new_capital(
                 num_shares, self.price_data.iloc[-1][ColumnController.close.value]
             )
-            print(
-                f"\nFinished with {num_shares} shares at price "
+            LOG.info(
+                f"Finished with {num_shares} shares at price "
                 + f"{self.price_data.iloc[-1][ColumnController.close.value]} "
                 + f"on {self.price_data.iloc[-1][ColumnController.date.value]}."
             )
-            print(f"Selling all for a new capital of {self.capital}.")
+            LOG.info(f"Selling all for a new capital of {self.capital}.")
         percent_change = self._get_percent_change(starting_cap, self.capital)
-        print(f"Starting cap: {starting_cap}")
-        print(f"Final cap: {self.capital}")
-        print(f"Change over {self.period or self.start_date} is {percent_change} %.")
-        print(f"Number of trades: {num_trades}")
+        LOG.info(f"Starting cap: {starting_cap}")
+        LOG.info(f"Final cap: {self.capital}")
+        LOG.info(f"Change over {self.period or self.start_date} is {percent_change} %.")
+        LOG.info(f"Number of trades: {num_trades}\n")
 
 
 if __name__ == "__main__":

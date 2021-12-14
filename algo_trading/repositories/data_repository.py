@@ -4,6 +4,7 @@ import sys
 from typing import Dict
 from urllib.error import HTTPError
 import ssl
+from pydantic import validate_arguments
 
 import pandas as pd
 from pydantic import validate_arguments

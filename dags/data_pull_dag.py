@@ -5,12 +5,23 @@ from typing import Dict, List
 import pandas as pd
 import yaml as yl
 
+from algo_trading.logger.default_logger import main_logger
 from algo_trading.utils.calculations import Calculator
 from algo_trading.repositories.data_repository import DataRepository
 from algo_trading.repositories.db_repository import DBRepository
 from algo_trading.config.controllers import ColumnController, DBHandlerController
 from algo_trading.utils.utils import clean_df, str_to_dt, dt_to_str
 from algo_trading.config import DB_INFO, DATE_FORMAT
+
+LOG_INFO = {
+    "name": "data_pull_dag",
+    "file": os.path.join("logs", f"data_pull_dag_{dt_to_str(datetime.today())}.log"),
+}
+
+LOG = main_logger(
+    LOG_INFO["name"],
+    LOG_INFO["file"],
+)
 
 
 def create_new_tables(db_info: Dict, db_handler: str, tickers: List) -> List:
@@ -21,7 +32,11 @@ def create_new_tables(db_info: Dict, db_handler: str, tickers: List) -> List:
     Returns:
         List: List of new tickers
     """
-    db = DBRepository(db_info, DBHandlerController[db_handler]).handler
+    db = DBRepository(
+        db_info,
+        DBHandlerController[db_handler],
+        LOG_INFO,
+    ).handler
     new_tickers = db.create_new_ticker_tables(tickers)
     return new_tickers
 
@@ -71,7 +86,11 @@ def add_new_ticker_data(
     Args:
         new_ticker_data (Dict): New data to be loaded to the DB
     """
-    db = DBRepository(db_info, DBHandlerController[db_handler]).handler
+    db = DBRepository(
+        db_info,
+        DBHandlerController[db_handler],
+        LOG_INFO,
+    ).handler
 
     for ticker, df in new_ticker_data.items():
         db.append_df_to_sql(ticker, df)
@@ -96,7 +115,11 @@ def get_existing_ticker_data(
         Dict: Existing data with key: ticker, val: pd.DataFrame
     """
     updated_ticker_data = dict()
-    db = DBRepository(db_info, DBHandlerController[db_handler]).handler
+    db = DBRepository(
+        db_info,
+        DBHandlerController[db_handler],
+        LOG_INFO,
+    ).handler
 
     for ticker in [t for t in tickers if t not in new_tickers]:
         last_date_entry_str = db.get_most_recent_date(ticker)
@@ -112,8 +135,8 @@ def get_existing_ticker_data(
         #     # make a custom exception here
         #     sys.exit(f"{end_date_str} is a weekend! No run run today boo boo...")
 
-        print(f"Last date entry for {ticker}: {last_date_entry_str}")
-        print(f"Pulling {ticker} from {query_date_str} to {end_date_str}")
+        LOG.info(f"\nLast date entry for {ticker}: {last_date_entry_str}")
+        LOG.info(f"Pulling {ticker} from {query_date_str} to {end_date_str}")
 
         data_pull_params = {
             "ticker": ticker,
@@ -136,7 +159,7 @@ def get_existing_ticker_data(
                 f"First date of stock_df is less than query date: {query_date_str}"
             )
 
-        print(
+        LOG.info(
             f"Adding {ticker} data for dates "
             + f"{stock_df[ColumnController.date.value].iloc[0]}"
             + f" -> {stock_df[ColumnController.date.value].iloc[-1]}"
@@ -166,10 +189,16 @@ def add_existing_ticker_data(
     Args:
         existing_ticker_data (Dict): Data to be loaded to the DB
     """
-    db = DBRepository(db_info, DBHandlerController[db_handler]).handler
+    db = DBRepository(
+        db_info,
+        DBHandlerController[db_handler],
+        LOG_INFO,
+    ).handler
 
     for ticker, df in existing_ticker_data.items():
         db.append_df_to_sql(ticker, df)
+
+    LOG.info(f"FINISHED ADDING DATA ON {dt_to_str(datetime.today())}.\n")
 
 
 if __name__ == "__main__":
