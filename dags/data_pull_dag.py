@@ -6,6 +6,7 @@ import pandas as pd
 import yaml as yl
 
 from algo_trading.logger.default_logger import main_logger
+from algo_trading.logger.controllers import LogConfig, LogLevelController
 from algo_trading.utils.calculations import Calculator
 from algo_trading.repositories.data_repository import DataRepository
 from algo_trading.repositories.db_repository import DBRepository
@@ -13,15 +14,14 @@ from algo_trading.config.controllers import ColumnController, DBHandlerControlle
 from algo_trading.utils.utils import clean_df, str_to_dt, dt_to_str
 from algo_trading.config import DB_INFO, DATE_FORMAT
 
-LOG_INFO = {
-    "name": "data_pull_dag",
-    "file": os.path.join("logs", f"data_pull_dag_{dt_to_str(datetime.today())}.log"),
-}
-
-LOG = main_logger(
-    LOG_INFO["name"],
-    LOG_INFO["file"],
+LOG_INFO = LogConfig(
+    log_name="data_pull_dag",
+    file_name=os.path.join("logs", f"data_pull_dag_{dt_to_str(datetime.today())}.log"),
+    log_level=LogLevelController.info,
 )
+
+
+LOG = main_logger(LOG_INFO)
 
 
 def create_new_tables(db_info: Dict, db_handler: str, tickers: List) -> List:
@@ -135,7 +135,7 @@ def get_existing_ticker_data(
         #     # make a custom exception here
         #     sys.exit(f"{end_date_str} is a weekend! No run run today boo boo...")
 
-        LOG.info(f"\nLast date entry for {ticker}: {last_date_entry_str}")
+        LOG.info(f"Last date entry for {ticker}: {last_date_entry_str}")
         LOG.info(f"Pulling {ticker} from {query_date_str} to {end_date_str}")
 
         data_pull_params = {
@@ -155,9 +155,11 @@ def get_existing_ticker_data(
         # Only process the data if the first date of the returned DF is
         # greater than or equal to the query_date.
         if str_to_dt(stock_df_first_date) < query_date:
-            raise ValueError(
-                f"First date of stock_df is less than query date: {query_date_str}"
+            LOG.error(
+                f"First date of stock_df {stock_df_first_date} is "
+                + f"less than query date: {query_date_str} for {ticker}"
             )
+            continue
 
         LOG.info(
             f"Adding {ticker} data for dates "

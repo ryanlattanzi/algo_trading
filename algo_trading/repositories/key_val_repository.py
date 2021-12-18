@@ -6,6 +6,7 @@ from pydantic import validate_arguments
 from logging import Logger
 
 from algo_trading.logger.default_logger import child_logger
+from algo_trading.logger.controllers import LogConfig
 from algo_trading.config.controllers import KeyValueController
 
 
@@ -54,7 +55,7 @@ class AbstractKeyValueRepository(ABC):
 
 
 class RedisRepository(AbstractKeyValueRepository):
-    def __init__(self, redis_info: Dict, log_info: Dict) -> None:
+    def __init__(self, redis_info: Dict, log_info: LogConfig) -> None:
         self.redis_info = redis_info
         self.log_info = log_info
 
@@ -63,7 +64,7 @@ class RedisRepository(AbstractKeyValueRepository):
         try:
             return self._log
         except AttributeError:
-            self._log = child_logger(self.log_info["name"], self.__class__.__name__)
+            self._log = child_logger(self.log_info.log_name, self.__class__.__name__)
             return self._log
 
     @property
@@ -78,14 +79,14 @@ class RedisRepository(AbstractKeyValueRepository):
         if type(value) == dict:
             value = json.dumps(value)
         self.conn.set(key, value)
-        self.log.info(f"Successfully updated {key} to {value}")
+        self.log.debug(f"Successfully updated {key} to {value}")
 
     def get(self, key: str) -> Optional[str]:
         return self.conn.get(key)
 
 
 class FakeKeyValueRepository(AbstractKeyValueRepository):
-    def __init__(self, data: Dict, log_info: Dict) -> None:
+    def __init__(self, data: Dict, log_info: LogConfig) -> None:
         self.data = data
         self.log_info = log_info
 
@@ -94,14 +95,14 @@ class FakeKeyValueRepository(AbstractKeyValueRepository):
         try:
             return self._log
         except AttributeError:
-            self._log = child_logger(self.log_info["name"], self.__class__.__name__)
+            self._log = child_logger(self.log_info.log_name, self.__class__.__name__)
             return self._log
 
     def set(self, key: str, value: Union[str, Dict]):
         if type(value) == dict:
             value = json.dumps(value)
         self.data[key] = value
-        self.log.info(f"Successfully updated {key} to {value}")
+        self.log.debug(f"Successfully updated {key} to {value}")
 
     def get(self, key: str) -> Optional[str]:
         return self.data[key]
@@ -118,7 +119,7 @@ class KeyValueRepository:
         self,
         kv_info: Dict,
         kv_handler: KeyValueController,
-        log_info: Dict,
+        log_info: LogConfig,
     ) -> None:
         """A wrapper class to provide a consistent interface to the
         different KeyValueRepository types found in the _kv_handlers class

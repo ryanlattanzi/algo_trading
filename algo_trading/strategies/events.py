@@ -1,15 +1,12 @@
-from dataclasses import dataclass
+from typing import Union
+from pydantic import BaseModel
 import datetime
 
 from algo_trading.config.controllers import StockStatusController
 
 
-class Event:
-    pass
+class TradeEvent(BaseModel):
 
-
-@dataclass
-class TradeEvent(Event):
-    date: datetime.date
+    date: Union[datetime.date, None]
     ticker: str
     signal: StockStatusController

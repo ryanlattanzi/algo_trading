@@ -1,13 +1,12 @@
 from typing import Dict, List, Union
 from abc import ABC, abstractmethod, abstractproperty
-from pydantic import validate_arguments
 from logging import Logger
-
 import pandas as pd
 import sqlalchemy as sa
 from sqlalchemy.engine.base import Engine
 from pydantic import validate_arguments
 
+from algo_trading.logger.controllers import LogConfig
 from algo_trading.logger.default_logger import child_logger
 from algo_trading.config.controllers import ColumnController, DBHandlerController
 from algo_trading.utils.utils import dt_to_str
@@ -156,7 +155,7 @@ class AbstractDBRepository(ABC):
 
 
 class FakeDBRepository(AbstractDBRepository):
-    def __init__(self, data: pd.DataFrame, log_info: Dict) -> None:
+    def __init__(self, data: pd.DataFrame, log_info: LogConfig) -> None:
         """Fake DB repo that accepts data as a DF to act as
         the table in the live price DB. The DF is in ASCENDING
         order by date.
@@ -194,7 +193,7 @@ class FakeDBRepository(AbstractDBRepository):
 
 
 class PostgresRepository(AbstractDBRepository):
-    def __init__(self, db_info: Dict, log_info: Dict) -> None:
+    def __init__(self, db_info: Dict, log_info: LogConfig) -> None:
         """DB Repository that taps into a Postgres instance.
         There are a few added methods to the raw AbstractDBRepository
         to handle some business scenarios.
@@ -210,7 +209,7 @@ class PostgresRepository(AbstractDBRepository):
         try:
             return self._log
         except AttributeError:
-            self._log = child_logger(self.log_info["name"], self.__class__.__name__)
+            self._log = child_logger(self.log_info.log_name, self.__class__.__name__)
             return self._log
 
     @property
@@ -288,7 +287,7 @@ class DBRepository:
         self,
         db_info: Union[Dict, pd.DataFrame],
         db_handler: DBHandlerController,
-        log_info: Dict,
+        log_info: LogConfig,
     ) -> None:
         """A wrapper class to provide a consistent interface to the
         different DBRepository types found in the _db_handlers class
