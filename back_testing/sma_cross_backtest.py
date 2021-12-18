@@ -4,8 +4,10 @@ import json
 from typing import Dict, Optional, Union
 import pandas as pd
 from pydantic import validate_arguments
+from logging import Logger
 
 from algo_trading.logger.default_logger import main_logger
+from algo_trading.logger.controllers import LogConfig, LogLevelController
 from algo_trading.utils.utils import dt_to_str
 from algo_trading.strategies.sma_cross_strat import SMACross
 from algo_trading.repositories.db_repository import AbstractDBRepository, DBRepository
@@ -20,16 +22,7 @@ from algo_trading.utils.utils import str_to_dt
 from algo_trading.strategies.events import TradeEvent
 
 from controllers import TestPeriodController
-
-LOG_INFO = {
-    "name": "SMA_backtest",
-    "file": os.path.join("logs", f"SMA_backtest_{dt_to_str(datetime.today())}.log"),
-}
-
-LOG = main_logger(
-    LOG_INFO["name"],
-    LOG_INFO["file"],
-)
+from events import BackTestResult
 
 
 class SMACrossBackTester:
@@ -51,6 +44,7 @@ class SMACrossBackTester:
         ticker: str,
         db_info: Dict,
         db_handler: DBHandlerController,
+        log_info: LogConfig,
         period: Optional[TestPeriodController] = None,
         start_date: Optional[str] = None,
         capital: int = 10000,
@@ -75,12 +69,21 @@ class SMACrossBackTester:
         self.period = period
         self.start_date = start_date
         self.capital = capital
+        self.log_info = log_info
 
         if self.period and self.start_date:
             raise ValueError("Please include either a period or a start date, not both")
 
         self.fake_db_repo = None
         self.fake_kv_repo = None
+
+    @property
+    def log(self) -> Logger:
+        try:
+            return self._log
+        except AttributeError:
+            self._log = main_logger(self.log_info)
+            return self._log
 
     @property
     def days_back(self) -> Union[int, str, None]:
@@ -108,7 +111,7 @@ class SMACrossBackTester:
             self._db_repo = DBRepository(
                 self.db_info,
                 self.db_handler,
-                LOG_INFO,
+                self.log_info,
             ).handler
             return self._db_repo
 
@@ -208,7 +211,7 @@ class SMACrossBackTester:
         """
         return round(((end_cap - start_cap) / start_cap) * 100, precision)
 
-    def test(self) -> None:
+    def test(self) -> BackTestResult:
         """Runs the SMA strategy over the cached price data.
         Instantiates a fake DBRepository and a fake KeyValueRepository
         to 'query' from.
@@ -218,13 +221,13 @@ class SMACrossBackTester:
         fake_db_repo = DBRepository(
             self.price_data,
             DBHandlerController.fake,
-            LOG_INFO,
+            self.log_info,
         )
         init_status, init_kv = self._init_fake_key_value()
         fake_kv_repo = KeyValueRepository(
             kv_info=init_kv,
             kv_handler=KeyValueController.fake,
-            log_info=LOG_INFO,
+            log_info=self.log_info,
         )
 
         sma = SMACross(self.ticker, fake_db_repo, fake_kv_repo)
@@ -239,13 +242,11 @@ class SMACrossBackTester:
             num_shares = 0
             init_message = f"${self.capital}"
 
-        print("\n*******************************************************")
-        LOG.info(
+        self.log.info(
             f"Beginning SMA Cross strategy with {init_message} at price "
             + f"{self.price_data[ColumnController.close.value].iloc[0]} on "
             + f"{self.price_data[ColumnController.date.value].iloc[0]}"
         )
-        print("*******************************************************\n")
 
         for idx, row in self.price_data.iterrows():
             if idx == 0:
@@ -279,7 +280,7 @@ class SMACrossBackTester:
                         self.capital, row[ColumnController.close.value]
                     )
                     num_trades += 1
-                    LOG.info(
+                    self.log.debug(
                         f"Bought {num_shares} shares at price {row[ColumnController.close.value]} "
                         + f"on {row[ColumnController.date.value]}."
                     )
@@ -288,7 +289,7 @@ class SMACrossBackTester:
                         num_shares, row[ColumnController.close.value]
                     )
                     num_trades += 1
-                    LOG.info(
+                    self.log.debug(
                         f"Sold {num_shares} shares at price "
                         + f"{row[ColumnController.close.value]} on "
                         + f"{row[ColumnController.date.value]} for a new capital of {self.capital}."
@@ -297,19 +298,27 @@ class SMACrossBackTester:
 
         if num_shares != 0:
             self.capital = self._get_new_capital(
-                num_shares, self.price_data.iloc[-1][ColumnController.close.value]
+                num_shares, self.price_data[ColumnController.close.value].iloc[-1]
             )
-            LOG.info(
+            self.log.debug(
                 f"Finished with {num_shares} shares at price "
-                + f"{self.price_data.iloc[-1][ColumnController.close.value]} "
-                + f"on {self.price_data.iloc[-1][ColumnController.date.value]}."
+                + f"{self.price_data[ColumnController.close.value].iloc[-1]} "
+                + f"on {self.price_data[ColumnController.date.value].iloc[-1]}."
             )
-            LOG.info(f"Selling all for a new capital of {self.capital}.")
+            self.log.debug(f"Selling all for a new capital of {self.capital}.")
         percent_change = self._get_percent_change(starting_cap, self.capital)
-        LOG.info(f"Starting cap: {starting_cap}")
-        LOG.info(f"Final cap: {self.capital}")
-        LOG.info(f"Change over {self.period or self.start_date} is {percent_change} %.")
-        LOG.info(f"Number of trades: {num_trades}\n")
+
+        self.log.info(f"Successfully backtested SMA Cross for {self.ticker}.\n")
+
+        return BackTestResult(
+            ticker=self.ticker,
+            start_date=dt_to_str(self.price_data[ColumnController.date.value].iloc[0]),
+            end_date=dt_to_str(self.price_data[ColumnController.date.value].iloc[-1]),
+            init_cap=starting_cap,
+            final_cap=self.capital,
+            cap_gains=percent_change,
+            num_trades=num_trades,
+        )
 
 
 if __name__ == "__main__":
@@ -320,8 +329,16 @@ if __name__ == "__main__":
         ticker=ticker,
         db_info=DB_INFO,
         db_handler=DBHandlerController.postgres,
+        log_info=LogConfig(
+            log_name="SMA_backtest",
+            file_name=os.path.join(
+                "logs", f"SMA_backtest_{dt_to_str(datetime.today())}.log"
+            ),
+            log_level=LogLevelController.info,
+        ),
         # period="3mo",
-        start_date="2020-01-01",
+        start_date="2005-01-01",
         capital=1000,
     )
-    tester.test()
+    result: BackTestResult = tester.test()
+    print(json.dumps(result.dict(), indent=2))

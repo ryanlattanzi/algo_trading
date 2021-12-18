@@ -1,12 +1,10 @@
 import logging
 import sys
 
+from algo_trading.logger.controllers import LogLevelController, LogConfig
 
-def main_logger(
-    log_name: str,
-    file_name: str = None,
-    log_level: str = "info",
-) -> logging.Logger:
+
+def main_logger(config: LogConfig) -> logging.Logger:
     """Default settings for application logger. Automatically
     prints to stdout, but has the option to write to a file as well.
 
@@ -19,12 +17,12 @@ def main_logger(
     """
 
     _log_levels = {
-        "info": logging.INFO,
-        "debug": logging.DEBUG,
+        LogLevelController.info: logging.INFO,
+        LogLevelController.debug: logging.DEBUG,
     }
 
-    logger = logging.getLogger(log_name)
-    logger.setLevel(_log_levels[log_level])
+    logger = logging.getLogger(config.log_name)
+    logger.setLevel(_log_levels[config.log_level])
 
     formatter = logging.Formatter(
         "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
@@ -36,8 +34,8 @@ def main_logger(
     logger.handlers.clear()
     logger.addHandler(sh)
 
-    if file_name:
-        fh = logging.FileHandler(file_name)
+    if config.file_name:
+        fh = logging.FileHandler(config.file_name)
         fh.setFormatter(formatter)
         logger.addHandler(fh)
 

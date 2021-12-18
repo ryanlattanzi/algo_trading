@@ -6,6 +6,7 @@ import pandas as pd
 import yaml as yl
 
 from algo_trading.logger.default_logger import main_logger
+from algo_trading.logger.controllers import LogConfig, LogLevelController
 from algo_trading.strategies.sma_cross_strat import SMACross
 from algo_trading.repositories.db_repository import DBRepository
 from algo_trading.repositories.key_val_repository import KeyValueRepository
@@ -26,15 +27,16 @@ we will slap them on the Airflow metastore.
 TODO: Create a Logging mechanism
 """
 
-LOG_INFO = {
-    "name": "sma_cross_dag",
-    "file": os.path.join("logs", f"sma_cross_dag_{dt_to_str(datetime.today())}.log"),
-}
 
-LOG = main_logger(
-    LOG_INFO["name"],
-    LOG_INFO["file"],
+LOG_INFO = LogConfig(
+    log_name="sma_cross_dag",
+    file_name=os.path.join("logs", f"sma_cross_dag_{dt_to_str(datetime.today())}.log"),
+    log_level=LogLevelController.info,
 )
+
+
+LOG = main_logger(LOG_INFO)
+
 
 # HOW TO GET THE NEW TICKERS AND OLD TICKERS PASSED FROM DATA_PULL_DAG HERE?
 
