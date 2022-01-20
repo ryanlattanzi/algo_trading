@@ -78,3 +78,8 @@ class DataHandlerController(Enum):
 class KeyValueController(Enum):
     fake = "fake"
     redis = "redis"
+
+
+class ObjStoreController(Enum):
+    minio = "minio"
+    s3 = "s3"

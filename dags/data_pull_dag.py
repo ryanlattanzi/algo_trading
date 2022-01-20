@@ -10,9 +10,10 @@ from algo_trading.logger.controllers import LogConfig, LogLevelController
 from algo_trading.utils.calculations import Calculator
 from algo_trading.repositories.data_repository import DataRepository
 from algo_trading.repositories.db_repository import DBRepository
+from algo_trading.repositories.obj_store_repository import ObjStoreRepository
 from algo_trading.config.controllers import ColumnController, DBHandlerController
 from algo_trading.utils.utils import clean_df, str_to_dt, dt_to_str
-from algo_trading.config import DB_INFO, DATE_FORMAT
+from algo_trading.config import DB_INFO, DATE_FORMAT, OBJ_STORE_INFO
 
 LOG_INFO = LogConfig(
     log_name="data_pull_dag",
