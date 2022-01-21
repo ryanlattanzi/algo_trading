@@ -57,7 +57,7 @@ class AbstractObjStore(ABC):
         """
 
     @abstractmethod
-    def delete_objects(self, bucket: str, objects: List[Dict]) -> Dict:
+    def delete_objects(self, bucket: str, objects: List) -> Dict:
         """Deletes objects in a bucket.
 
         Args:
@@ -98,6 +98,19 @@ class AbstractObjStore(ABC):
 
         Returns:
             Dict: Response object.
+        """
+        pass
+
+    @abstractmethod
+    def put_object(self, file_body: str, bucket: str, key: str) -> None:
+        """Uploads a file object from memory (StringIO.getvalue() string) to a
+        bucket. Typical use case is to upload a pandas DF directly to object
+        storage instead of saving it to disk and then uploading.
+
+        Args:
+            file_body (str): StringIO.getvalue() string
+            bucket (str): Bucket destination
+            key (str): File destination within bucket
         """
         pass
 
@@ -193,6 +206,13 @@ class S3Repository(AbstractObjStore):
 
     def list_objects(self, bucket: str) -> Dict:
         return self.client.list_objects_v2(Bucket=bucket)
+
+    def put_object(self, file_body: str, bucket: str, key: str) -> None:
+        return self.client.put_object(
+            Body=file_body,
+            Bucket=bucket,
+            Key=key,
+        )
 
     def upload_file(self, filename: str, bucket: str, key: str) -> None:
         return self.client.upload_file(

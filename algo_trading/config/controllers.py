@@ -1,4 +1,5 @@
 from enum import Enum
+from pydantic import BaseModel
 from typing import List, Dict
 
 
@@ -83,3 +84,12 @@ class KeyValueController(Enum):
 class ObjStoreController(Enum):
     minio = "minio"
     s3 = "s3"
+
+
+class Config(BaseModel):
+
+    ticker_list: List
+    db_repo: str
+    data_repo: str
+    kv_repo: str
+    obj_store_repo: str
