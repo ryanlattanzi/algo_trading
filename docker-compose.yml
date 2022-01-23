@@ -1,10 +1,11 @@
 version: '3.4'
 
 volumes:
-  postgres_data:
+  postgres_data: null
+  object_storage: null
 
 networks:
-  algo_trading_network:
+  algo_trading_network: null
 
 services:
   postgres:
@@ -37,3 +38,27 @@ services:
     command: redis-server --requirepass redispassword
     networks:
       - algo_trading_network
+
+  minio:
+    image: quay.io/minio/minio:RELEASE.2021-12-10T23-03-39Z
+    volumes:
+      - object_storage:/object_storage
+    ports:
+      - 9000:9000
+      - 9001:9001
+    env_file:
+      - .env
+    command: server /object_storage --console-address ":9001"
+    networks:
+      - algo_trading_network
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "curl",
+          "-f",
+          "http://localhost:9000/minio/health/live"
+        ]
+      interval: 30s
+      timeout: 20s
+      retries: 3

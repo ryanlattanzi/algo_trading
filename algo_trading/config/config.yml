@@ -1,6 +1,7 @@
 db_repo: postgres
 data_repo: yahoo_finance
 kv_repo: redis
+obj_store_repo: minio
 ticker_list:
   - aapl
 #  - nio

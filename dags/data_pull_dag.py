@@ -1,4 +1,5 @@
 import os
+from io import StringIO
 from datetime import datetime, timedelta
 from typing import Dict, List
 
@@ -10,9 +11,14 @@ from algo_trading.logger.controllers import LogConfig, LogLevelController
 from algo_trading.utils.calculations import Calculator
 from algo_trading.repositories.data_repository import DataRepository
 from algo_trading.repositories.db_repository import DBRepository
-from algo_trading.config.controllers import ColumnController, DBHandlerController
-from algo_trading.utils.utils import clean_df, str_to_dt, dt_to_str
-from algo_trading.config import DB_INFO, DATE_FORMAT
+from algo_trading.repositories.obj_store_repository import ObjStoreRepository
+from algo_trading.config.controllers import (
+    ColumnController,
+    DBHandlerController,
+    ObjStoreController,
+)
+from algo_trading.utils.utils import clean_df, str_to_dt, dt_to_str, parse_config
+from algo_trading.config import DB_INFO, DATE_FORMAT, OBJ_STORE_INFO
 
 LOG_INFO = LogConfig(
     log_name="data_pull_dag",
@@ -20,11 +26,40 @@ LOG_INFO = LogConfig(
     log_level=LogLevelController.info,
 )
 
-
 LOG = main_logger(LOG_INFO)
 
+OBJ_STORE_DATA_BUCKET = "algo-trading-price-data"
+OBJ_STORE_DATA_KEY = "{ticker}/{run_date}.csv"
 
-def create_new_tables(db_info: Dict, db_handler: str, tickers: List) -> List:
+OBJ_STORE_LOG_BUCKET = "algo-trading-logs"
+OBJ_STORE_LOG_KEY = "data_pull_dag/{run_date}.log"
+
+CONFIG_PATH = os.path.join(
+    os.path.dirname(os.path.realpath(__file__)).replace("dags", "algo_trading"),
+    "config/config.yml",
+)
+CONFIG = parse_config(CONFIG_PATH)
+
+DB_HANDLER = DBRepository(
+    DB_INFO,
+    DBHandlerController[CONFIG.db_repo],
+    LOG_INFO,
+).handler
+
+OBJ_STORE_HANDLER = ObjStoreRepository(
+    OBJ_STORE_INFO,
+    ObjStoreController[CONFIG.obj_store_repo],
+    LOG_INFO,
+).handler
+
+
+def create_bucket(bucket_name: str) -> None:
+    buckets = OBJ_STORE_HANDLER.list_buckets()
+    if bucket_name not in [bucket["Name"] for bucket in buckets["Buckets"]]:
+        OBJ_STORE_HANDLER.create_bucket(bucket_name)
+
+
+def create_new_tables(tickers: List) -> List:
     """
     Initializes the config DBInterface instance and creates new tables
     based off of new tickers that popped up in the configuration.
@@ -32,17 +67,13 @@ def create_new_tables(db_info: Dict, db_handler: str, tickers: List) -> List:
     Returns:
         List: List of new tickers
     """
-    db = DBRepository(
-        db_info,
-        DBHandlerController[db_handler],
-        LOG_INFO,
-    ).handler
-    new_tickers = db.create_new_ticker_tables(tickers)
+    new_tickers = DB_HANDLER.create_new_ticker_tables(tickers)
     return new_tickers
 
 
 def get_new_ticker_data(
-    data_handler: str, new_tickers: List
+    data_handler: str,
+    new_tickers: List,
 ) -> Dict[str, pd.DataFrame]:
     """
     Gets historical data for the list of new tickers found.
@@ -75,29 +106,35 @@ def get_new_ticker_data(
     return new_ticker_data
 
 
-def add_new_ticker_data(
-    db_info: Dict, db_handler: Dict, new_ticker_data: Dict[str, pd.DataFrame]
-) -> None:
+def persist_ticker_data(ticker_data: Dict[str, pd.DataFrame]) -> None:
     """
-    Slaps the historical data from pd.DataFrame into the DB.
-    For now, this is meant to run for new tickers, since it will
-    load the entire DF into the table.
+    Slaps the historical data from pd.DataFrame into the DB and Object
+    Store.
 
     Args:
-        new_ticker_data (Dict): New data to be loaded to the DB
+        ticker_data (Dict): Data to be loaded to the DB
     """
-    db = DBRepository(
-        db_info,
-        DBHandlerController[db_handler],
-        LOG_INFO,
-    ).handler
 
-    for ticker, df in new_ticker_data.items():
-        db.append_df_to_sql(ticker, df)
+    for ticker, df in ticker_data.items():
+        # Persisting data to object storage.
+        csv_buffer = StringIO()
+        df.to_csv(csv_buffer, index=False)
+        OBJ_STORE_HANDLER.put_object(
+            file_body=csv_buffer.getvalue(),
+            bucket=OBJ_STORE_DATA_BUCKET,
+            key=OBJ_STORE_DATA_KEY.format(
+                ticker=ticker, run_date=dt_to_str(datetime.today())
+            ),
+        )
+
+        # Saving data to the database.
+        DB_HANDLER.append_df_to_sql(ticker, df)
 
 
 def get_existing_ticker_data(
-    db_info: Dict, db_handler: str, data_handler: str, tickers: List, new_tickers: List
+    data_handler: str,
+    tickers: List,
+    new_tickers: List,
 ) -> Dict:
     """
     Gets data for the list of existing tickers. The DF date will
@@ -115,14 +152,9 @@ def get_existing_ticker_data(
         Dict: Existing data with key: ticker, val: pd.DataFrame
     """
     updated_ticker_data = dict()
-    db = DBRepository(
-        db_info,
-        DBHandlerController[db_handler],
-        LOG_INFO,
-    ).handler
 
     for ticker in [t for t in tickers if t not in new_tickers]:
-        last_date_entry_str = db.get_most_recent_date(ticker)
+        last_date_entry_str = DB_HANDLER.get_most_recent_date(ticker)
         last_date_entry = str_to_dt(last_date_entry_str)
 
         query_date = last_date_entry + timedelta(days=1)
@@ -168,7 +200,7 @@ def get_existing_ticker_data(
         )
 
         # Getting rows 199 days back from the earliest row of the DF
-        hist_df = db.get_days_back(ticker, 199)
+        hist_df = DB_HANDLER.get_days_back(ticker, 199)
         full_df = pd.concat([hist_df, stock_df], axis=0).reset_index(drop=True)
         full_df[ColumnController.date.value] = pd.to_datetime(
             full_df[ColumnController.date.value]
@@ -182,45 +214,32 @@ def get_existing_ticker_data(
     return updated_ticker_data
 
 
-def add_existing_ticker_data(
-    db_info: Dict, db_handler: Dict, existing_ticker_data: Dict
-) -> None:
-    """
-    Append updated ticker data to existing tables in the DB.
-
-    Args:
-        existing_ticker_data (Dict): Data to be loaded to the DB
-    """
-    db = DBRepository(
-        db_info,
-        DBHandlerController[db_handler],
-        LOG_INFO,
-    ).handler
-
-    for ticker, df in existing_ticker_data.items():
-        db.append_df_to_sql(ticker, df)
-
-    LOG.info(f"FINISHED ADDING DATA ON {dt_to_str(datetime.today())}.\n")
+def persist_log() -> None:
+    OBJ_STORE_HANDLER.upload_file(
+        LOG_INFO.file_name,
+        OBJ_STORE_LOG_BUCKET,
+        OBJ_STORE_LOG_KEY.format(run_date=dt_to_str(datetime.today())),
+    )
 
 
 if __name__ == "__main__":
 
-    # Loading in and parsing config
-    config_path = os.path.join(
-        os.path.dirname(os.path.realpath(__file__)).replace("dags", "algo_trading"),
-        "config/config.yml",
+    create_bucket(OBJ_STORE_DATA_BUCKET)
+    create_bucket(OBJ_STORE_LOG_BUCKET)
+
+    new_tickers = create_new_tables(CONFIG.ticker_list)
+    new_ticker_data = get_new_ticker_data(
+        CONFIG.data_repo,
+        new_tickers,
     )
-    config = yl.safe_load(open(config_path, "r"))
-    tickers = config["ticker_list"]
-    db_handler = config["db_repo"]
-    data_handler = config["data_repo"]
-    kv_handler = config["kv_repo"]
-
-    new_tickers = create_new_tables(DB_INFO, db_handler, tickers)
-
-    new_ticker_data = get_new_ticker_data(data_handler, new_tickers)
-    add_new_ticker_data(DB_INFO, db_handler, new_ticker_data)
+    persist_ticker_data(new_ticker_data)
     existing_ticker_data = get_existing_ticker_data(
-        DB_INFO, db_handler, data_handler, tickers, new_tickers
+        CONFIG.data_repo,
+        CONFIG.ticker_list,
+        new_tickers,
     )
-    add_existing_ticker_data(DB_INFO, db_handler, existing_ticker_data)
+    persist_ticker_data(existing_ticker_data)
+
+    LOG.info(f"FINISHED ADDING DATA ON {dt_to_str(datetime.today())}.\n")
+
+    persist_log()
