@@ -6,8 +6,8 @@ from typing import Dict, List
 import pandas as pd
 import yaml as yl
 
-from algo_trading.logger.default_logger import main_logger
-from algo_trading.logger.controllers import LogConfig, LogLevelController
+from algo_trading.logger.default_logger import get_main_logger
+from algo_trading.logger.controllers import LogLevelController
 from algo_trading.utils.calculations import Calculator
 from algo_trading.repositories.data_repository import DataRepository
 from algo_trading.repositories.db_repository import DBRepository
@@ -17,28 +17,21 @@ from algo_trading.config.controllers import (
     DBHandlerController,
     ObjStoreController,
 )
-from algo_trading.utils.utils import clean_df, str_to_dt, dt_to_str, parse_config
-from algo_trading.config import DB_INFO, DATE_FORMAT, OBJ_STORE_INFO
+from algo_trading.utils.utils import clean_df, str_to_dt, dt_to_str
+from algo_trading.config import DB_INFO, DATE_FORMAT, OBJ_STORE_INFO, CONFIG
 
-LOG_INFO = LogConfig(
+
+LOG, LOG_INFO = get_main_logger(
     log_name="data_pull_dag",
     file_name=os.path.join("logs", f"data_pull_dag_{dt_to_str(datetime.today())}.log"),
     log_level=LogLevelController.info,
 )
-
-LOG = main_logger(LOG_INFO)
 
 OBJ_STORE_DATA_BUCKET = "algo-trading-price-data"
 OBJ_STORE_DATA_KEY = "{ticker}/{run_date}.csv"
 
 OBJ_STORE_LOG_BUCKET = "algo-trading-logs"
 OBJ_STORE_LOG_KEY = "data_pull_dag/{run_date}.log"
-
-CONFIG_PATH = os.path.join(
-    os.path.dirname(os.path.realpath(__file__)).replace("dags", "algo_trading"),
-    "config/config.yml",
-)
-CONFIG = parse_config(CONFIG_PATH)
 
 DB_HANDLER = DBRepository(
     DB_INFO,
@@ -54,6 +47,11 @@ OBJ_STORE_HANDLER = ObjStoreRepository(
 
 
 def create_bucket(bucket_name: str) -> None:
+    """Creates bucket if not exists.
+
+    Args:
+        bucket_name (str): Name of bucket to create.
+    """
     buckets = OBJ_STORE_HANDLER.list_buckets()
     if bucket_name not in [bucket["Name"] for bucket in buckets["Buckets"]]:
         OBJ_STORE_HANDLER.create_bucket(bucket_name)

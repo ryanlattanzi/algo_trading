@@ -7,7 +7,7 @@ from sqlalchemy.engine.base import Engine
 from pydantic import validate_arguments
 
 from algo_trading.logger.controllers import LogConfig
-from algo_trading.logger.default_logger import child_logger
+from algo_trading.logger.default_logger import get_child_logger
 from algo_trading.config.controllers import ColumnController, DBHandlerController
 from algo_trading.utils.utils import dt_to_str
 
@@ -209,7 +209,9 @@ class PostgresRepository(AbstractDBRepository):
         try:
             return self._log
         except AttributeError:
-            self._log = child_logger(self.log_info.log_name, self.__class__.__name__)
+            self._log = get_child_logger(
+                self.log_info.log_name, self.__class__.__name__
+            )
             return self._log
 
     @property

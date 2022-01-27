@@ -1,15 +1,9 @@
 from typing import List
 from datetime import datetime
 import pandas as pd
-import yaml
 
-from algo_trading.config.controllers import ColumnController, Config
+from algo_trading.config.controllers import ColumnController
 from algo_trading.config import DATE_FORMAT
-
-
-def parse_config(config_path: str) -> Config:
-    config = yaml.safe_load(open(config_path, "r"))
-    return Config(**config)
 
 
 def clean_df(df: pd.DataFrame) -> pd.DataFrame:

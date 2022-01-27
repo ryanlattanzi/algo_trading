@@ -5,7 +5,7 @@ import json
 from pydantic import validate_arguments
 from logging import Logger
 
-from algo_trading.logger.default_logger import child_logger
+from algo_trading.logger.default_logger import get_child_logger
 from algo_trading.logger.controllers import LogConfig
 from algo_trading.config.controllers import KeyValueController
 
@@ -64,7 +64,9 @@ class RedisRepository(AbstractKeyValueRepository):
         try:
             return self._log
         except AttributeError:
-            self._log = child_logger(self.log_info.log_name, self.__class__.__name__)
+            self._log = get_child_logger(
+                self.log_info.log_name, self.__class__.__name__
+            )
             return self._log
 
     @property
@@ -95,7 +97,9 @@ class FakeKeyValueRepository(AbstractKeyValueRepository):
         try:
             return self._log
         except AttributeError:
-            self._log = child_logger(self.log_info.log_name, self.__class__.__name__)
+            self._log = get_child_logger(
+                self.log_info.log_name, self.__class__.__name__
+            )
             return self._log
 
     def set(self, key: str, value: Union[str, Dict]):
