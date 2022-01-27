@@ -31,21 +31,22 @@ To start your local environment, run the command
 ```
 and most likely respond `y` to the prompt, which asks if you would like to wipe the Docker volumes clean for a fresh start.
 
-Now, Postgres should be running on port `5432` with name `algo_trading_postgres_1`, PGAdmin should be running on port `80` with name `algo_trading_pgadmin_1`, and MinIO on port `9001` with name `algo_trading_minio_1` (the UI can be accessed via `localhost:9001`).
+Now, Postgres should be running on port `5432` with name `algo_trading_postgres_1`, PGAdmin should be running on port `80` (UI on `localhost:80`) with name `algo_trading_pgadmin_1`, and MinIO on port `9001` with name `algo_trading_minio_1` (UI on `localhost:9001`).
 
 Finally, you must create a `logs` folder under the directory `dags` and another one under `back_testing`.
 
 # Running The App
 
-For now, there are 2 entrypoints into the system: `dags/data_pull_dag.py` and `back_testing/sma_cross_backtest.py`. Both directories contain their own `README.md` to explain the components and how they work. The directory `algo_trading` includes all the source code that both entrypoints make use of. Within `algo_trading/config/config.yml`, you will find values to bootstrap the entrypoints with information on which tickers to analyze, which database backend to use, etc.
+For now, there are 2 entrypoints into the system: `dags/data_pull_dag.py` and `back_testing/sma_cross_backtest.py`. Both directories contain their own `README.md` to explain the components and how they work. The directory `algo_trading` includes all the source code that both entrypoints make use of. Within `algo_trading/config/config.yml`, you will find values to bootstrap the entrypoints with configurations on which tickers to analyze, which database backend to use, etc.
 
 For now, the best way to execute the program is `python3 data_pull_dag.py` or `python3 sma_cross_backtest.py`. Please see the next section on how we plan on making this more beefy.
 
 # Future Endeavors
 
 - As stated above, we plan to make these entrypoints more robust than your elementary `python3 data_pull_dag.py` commands by perhaps deploying the `dags` folder to an Airflow environment (or maybe something more compact and cheaper...) and Dockerizing the `back_testing` folder as a microservice. To make `algo_trading` more usable for all systems, perhaps we could deploy it as a package to pypi and include it in other environments' `requirements.txt`.
-- As it stands, we currently only have the Simple Moving Average (SMA) strategy. We want to add more strategies obviously, and we tried to architect the system such that the strategies have a fixed input and output so that they can be plugged in simply by a change of configuration.
+- As it stands, we currently only have the Simple Moving Average (SMA) strategy. We want to add more strategies obviously, and we tried to architect the system such that the strategies have a fixed input and output (by using interfaces) so that they can be plugged in simply by a change of configuration.
 - Create a subscription UI that allows users to select tickers that they are interested in monitoring. To determine the appropriate strategy, we will recommend one (based off past price movement, back-testing all strategies and choosing the one that performs best, or some other method) or have the user manually choose one. It should be entirely possible to analyze a given ticker with more than one strategy. Users should also be able to toy around with backtesting the strategies here.
+- Transition some of these pieces to Golang and GRPC to make it faster.
 
 # Proposed Architecture
 
@@ -57,6 +58,7 @@ System architecture is not our forte, but here is a stab. The UI, backtester, st
 - The email service will be a fairly simple API that will shoot emails to all folks subscribed to a given stock if the strategy finds it time to take action (buy/sell).
 - Redis will keep track of which stocks are currently being tracked, who is subscribed to what stocks and strategies, which strategy is best for each stock, and various strategy-specific data to make the strategy microservice calculations possible.
 - Postgres simply holds daily price data for each stock. Enriched data includes 7, 21, 50, 100, and 200-day moving averages. These are computed by the data pulling DAGs.
+- DAGs pull price data and do simple calculations necessary for various strategies. This data is stored in both postgres and redis.
 
 ![Architecture Diagram](architecture.jpg)
 
