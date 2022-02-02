@@ -2,31 +2,22 @@ import os
 import json
 from typing import Dict, List
 from datetime import datetime
-import pandas as pd
-import yaml as yl
 
 from algo_trading.logger.default_logger import get_main_logger
 from algo_trading.logger.controllers import LogLevelController
 from algo_trading.strategies.sma_cross_strat import SMACross
 from algo_trading.repositories.db_repository import DBRepository
 from algo_trading.repositories.key_val_repository import KeyValueRepository
-from algo_trading.config.controllers import ColumnController, StockStatusController
+from algo_trading.repositories.obj_store_repository import ObjStoreRepository
+from algo_trading.config.controllers import (
+    ColumnController,
+    StockStatusController,
+    ObjStoreController,
+    DBHandlerController,
+    KeyValueController,
+)
 from algo_trading.utils.utils import str_to_dt, dt_to_str
-from algo_trading.config.controllers import DBHandlerController, KeyValueController
-from algo_trading.config import DB_INFO, KV_INFO, CONFIG
-
-
-"""
-The purpose of this script is to run a flow of the DBRepository and DataRepository objects.
-This is essentially a placeholder that will be replaced with a simple Airflow DAG,
-in which each function will be a task.
-
-Environment variables and config.yml will be depricated when moving to Airflow, since
-we will slap them on the Airflow metastore.
-
-
-TODO: Create a Logging mechanism
-"""
+from algo_trading.config import DB_INFO, KV_INFO, OBJ_STORE_INFO, CONFIG
 
 
 LOG, LOG_INFO = get_main_logger(
@@ -47,19 +38,27 @@ KV_HANDLER = KeyValueRepository(
     LOG_INFO,
 ).handler
 
+OBJ_STORE_HANDLER = ObjStoreRepository(
+    OBJ_STORE_INFO,
+    ObjStoreController[CONFIG.obj_store_repo],
+    LOG_INFO,
+).handler
 
-# HOW TO GET THE NEW TICKERS AND OLD TICKERS PASSED FROM DATA_PULL_DAG HERE?
 
-
-def backfill_redis(new_ticker_data: Dict[str, pd.DataFrame]) -> None:
+def backfill_redis(new_ticker_paths: Dict[str, Dict[str, str]]) -> None:
     """Gets up to date redis data for new tickers to indicate last
     cross dates and status.
 
     Args:
-        new_ticker_data (Dict): New tickers to update redis with.
+        new_ticker_paths (Dict): New tickers and paths to download data from.
     """
 
-    for ticker, data in new_ticker_data.items():
+    for ticker, path_dict in new_ticker_paths.items():
+        data = OBJ_STORE_HANDLER.download_fileobj(
+            bucket=path_dict["bucket"],
+            key=path_dict["key"],
+            file_type="df",
+        )
         cross_info = KV_HANDLER.get(ticker)
         if cross_info is not None:
             LOG.info(
@@ -142,6 +141,7 @@ def update_redis(tickers: List, new_tickers: List) -> None:
 
 
 if __name__ == "__main__":
+    pass
 
     # Loading in and parsing config
     # config_path = os.path.join(
@@ -154,7 +154,7 @@ if __name__ == "__main__":
     # data_handler = config["data_repo"]
     # kv_handler = config["kv_repo"]
 
-    LOG.info("testing from sma")
+    # LOG.info("testing from sma")
 
     # backfill_redis(new_ticker_data)
 

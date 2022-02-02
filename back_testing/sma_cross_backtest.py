@@ -6,10 +6,12 @@ import pandas as pd
 from pydantic import validate_arguments
 from logging import Logger
 
-from algo_trading.logger.default_logger import main_logger
+from algo_trading.config.controllers import TestPeriodController
+from algo_trading.logger.default_logger import get_main_logger
 from algo_trading.logger.controllers import LogConfig, LogLevelController
 from algo_trading.utils.utils import dt_to_str
 from algo_trading.strategies.sma_cross_strat import SMACross
+from algo_trading.strategies.events import BackTestResult
 from algo_trading.repositories.db_repository import AbstractDBRepository, DBRepository
 from algo_trading.repositories.key_val_repository import KeyValueRepository
 from algo_trading.config.controllers import (
@@ -20,9 +22,6 @@ from algo_trading.config.controllers import (
 )
 from algo_trading.utils.utils import str_to_dt
 from algo_trading.strategies.events import TradeEvent
-
-from controllers import TestPeriodController
-from events import BackTestResult
 
 
 class SMACrossBackTester:
@@ -82,7 +81,7 @@ class SMACrossBackTester:
         try:
             return self._log
         except AttributeError:
-            self._log = main_logger(self.log_info)
+            self._log = get_main_logger(self.log_info)
             return self._log
 
     @property

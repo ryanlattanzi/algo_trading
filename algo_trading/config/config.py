@@ -17,6 +17,12 @@ def parse_config(config_path: str) -> Config:
 CONFIG_PATH = getenv("CONFIG_PATH")
 CONFIG = parse_config(CONFIG_PATH)
 
+# Loading in obj store bucket names
+DATA_BUCKET = getenv("DATA_BUCKET")
+DATA_KEY = getenv("DATA_KEY")
+LOG_BUCKET = getenv("LOG_BUCKET")
+LOG_KEY = getenv("LOG_KEY")
+
 # Loading in DB info
 DB_HOST = getenv("POSTGRES_HOST")
 DB_PORT = getenv("POSTGRES_PORT")

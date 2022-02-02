@@ -1,6 +1,9 @@
+from io import StringIO, BytesIO
 from logging import Logger
-from typing import Dict, List
+from typing import Dict, List, Union
 import boto3
+import json
+import pandas as pd
 from abc import ABC, abstractmethod, abstractproperty
 from pydantic import validate_arguments
 
@@ -77,6 +80,24 @@ class AbstractObjStore(ABC):
             bucket (str): Bucket name.
             key (str): File name in bucket.
             filename (str): Local file name to store file.
+        """
+        pass
+
+    @abstractmethod
+    def download_fileobj(
+        self, bucket: str, key: str, file_type: str
+    ) -> Union[pd.DataFrame, Dict, str]:
+        """Downloads a file into a StringIO object. Returns
+        python object with data. Used to keep obj in memory
+        without writing it to disk.
+
+        Args:
+            bucket (str): Bucket name.
+            key (str): File name in bucket.
+            file_type (str): Python filetype to return.
+
+        Returns:
+            Union[pd.DataFrame, Dict, str]: Python object with data.
         """
         pass
 
@@ -202,6 +223,23 @@ class S3Repository(AbstractObjStore):
             Key=key,
             Filename=filename,
         )
+
+    def download_fileobj(
+        self, bucket: str, key: str, file_type: str
+    ) -> Union[pd.DataFrame, Dict, str]:
+        data = BytesIO()
+        self.client.download_fileobj(
+            Bucket=bucket,
+            Key=key,
+            Fileobj=data,
+        )
+
+        if file_type == "df":
+            return pd.read_csv(data)
+        elif file_type == "json":
+            return json.loads(data.getvalue().decode("utf-8"))
+        else:
+            return data
 
     def list_buckets(self) -> Dict:
         return self.client.list_buckets()
