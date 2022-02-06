@@ -2,9 +2,7 @@ import os
 from io import StringIO
 from datetime import datetime, timedelta
 from typing import Dict, List
-
 import pandas as pd
-import yaml as yl
 
 from algo_trading.logger.default_logger import get_main_logger
 from algo_trading.logger.controllers import LogLevelController
@@ -18,7 +16,16 @@ from algo_trading.config.controllers import (
     ObjStoreController,
 )
 from algo_trading.utils.utils import clean_df, str_to_dt, dt_to_str
-from algo_trading.config import DB_INFO, DATE_FORMAT, OBJ_STORE_INFO, CONFIG
+from algo_trading.config import (
+    DB_INFO,
+    DATE_FORMAT,
+    OBJ_STORE_INFO,
+    CONFIG,
+    DATA_BUCKET,
+    DATA_KEY,
+    LOG_BUCKET,
+    LOG_KEY,
+)
 
 
 LOG, LOG_INFO = get_main_logger(
@@ -26,12 +33,6 @@ LOG, LOG_INFO = get_main_logger(
     file_name=os.path.join("logs", f"data_pull_dag_{dt_to_str(datetime.today())}.log"),
     log_level=LogLevelController.info,
 )
-
-OBJ_STORE_DATA_BUCKET = "algo-trading-price-data"
-OBJ_STORE_DATA_KEY = "{ticker}/{run_date}.csv"
-
-OBJ_STORE_LOG_BUCKET = "algo-trading-logs"
-OBJ_STORE_LOG_KEY = "data_pull_dag/{run_date}.log"
 
 DB_HANDLER = DBRepository(
     DB_INFO,
@@ -54,6 +55,7 @@ def create_bucket(bucket_name: str) -> None:
     """
     buckets = OBJ_STORE_HANDLER.list_buckets()
     if bucket_name not in [bucket["Name"] for bucket in buckets["Buckets"]]:
+        LOG.info(f"Creating bucket {bucket_name}")
         OBJ_STORE_HANDLER.create_bucket(bucket_name)
 
 
@@ -89,6 +91,7 @@ def get_new_ticker_data(
     data_pull_params = {
         "start_date": "max",
         "end_date": dt_to_str(datetime.today()),
+        "log_info": LOG_INFO,
     }
 
     for ticker in new_tickers:
@@ -104,29 +107,41 @@ def get_new_ticker_data(
     return new_ticker_data
 
 
-def persist_ticker_data(ticker_data: Dict[str, pd.DataFrame]) -> None:
+def persist_ticker_data(
+    ticker_data: Dict[str, pd.DataFrame]
+) -> Dict[str, Dict[str, str]]:
     """
     Slaps the historical data from pd.DataFrame into the DB and Object
     Store.
 
     Args:
         ticker_data (Dict): Data to be loaded to the DB
+
+    Returns:
+        Dict: Mapping tickers to bucket and key.
     """
 
+    paths = dict()
     for ticker, df in ticker_data.items():
         # Persisting data to object storage.
         csv_buffer = StringIO()
         df.to_csv(csv_buffer, index=False)
+        bucket = DATA_BUCKET
+        key = DATA_KEY.format(ticker=ticker, run_date=dt_to_str(datetime.today()))
         OBJ_STORE_HANDLER.put_object(
             file_body=csv_buffer.getvalue(),
-            bucket=OBJ_STORE_DATA_BUCKET,
-            key=OBJ_STORE_DATA_KEY.format(
-                ticker=ticker, run_date=dt_to_str(datetime.today())
-            ),
+            bucket=bucket,
+            key=key,
         )
+        paths[ticker] = {
+            "bucket": bucket,
+            "key": key,
+        }
 
         # Saving data to the database.
         DB_HANDLER.append_df_to_sql(ticker, df)
+
+    return paths
 
 
 def get_existing_ticker_data(
@@ -166,12 +181,18 @@ def get_existing_ticker_data(
         #     sys.exit(f"{end_date_str} is a weekend! No run run today boo boo...")
 
         LOG.info(f"Last date entry for {ticker}: {last_date_entry_str}")
+
+        if query_date_str == end_date_str:
+            LOG.info(f"Data for {ticker} already up to date on {end_date_str}.")
+            continue
+
         LOG.info(f"Pulling {ticker} from {query_date_str} to {end_date_str}")
 
         data_pull_params = {
             "ticker": ticker,
             "start_date": query_date_str,
             "end_date": end_date_str,
+            "log_info": LOG_INFO,
         }
 
         stock_df = DataRepository(
@@ -215,29 +236,12 @@ def get_existing_ticker_data(
 def persist_log() -> None:
     OBJ_STORE_HANDLER.upload_file(
         LOG_INFO.file_name,
-        OBJ_STORE_LOG_BUCKET,
-        OBJ_STORE_LOG_KEY.format(run_date=dt_to_str(datetime.today())),
+        LOG_BUCKET,
+        LOG_KEY.format(
+            log_name=LOG_INFO.log_name, run_date=dt_to_str(datetime.today())
+        ),
     )
 
 
-if __name__ == "__main__":
-
-    create_bucket(OBJ_STORE_DATA_BUCKET)
-    create_bucket(OBJ_STORE_LOG_BUCKET)
-
-    new_tickers = create_new_tables(CONFIG.ticker_list)
-    new_ticker_data = get_new_ticker_data(
-        CONFIG.data_repo,
-        new_tickers,
-    )
-    persist_ticker_data(new_ticker_data)
-    existing_ticker_data = get_existing_ticker_data(
-        CONFIG.data_repo,
-        CONFIG.ticker_list,
-        new_tickers,
-    )
-    persist_ticker_data(existing_ticker_data)
-
-    LOG.info(f"FINISHED ADDING DATA ON {dt_to_str(datetime.today())}.\n")
-
-    persist_log()
+def finish_log() -> None:
+    LOG.info(f"END OF DATA PULL DAG ON {dt_to_str(datetime.today())}.\n")
