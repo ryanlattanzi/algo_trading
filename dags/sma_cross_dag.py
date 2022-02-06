@@ -1,7 +1,7 @@
 import os
 import json
 from typing import Dict, List
-from datetime import datetime
+from datetime import datetime, timedelta
 
 from algo_trading.logger.default_logger import get_main_logger
 from algo_trading.logger.controllers import LogLevelController
@@ -17,7 +17,14 @@ from algo_trading.config.controllers import (
     KeyValueController,
 )
 from algo_trading.utils.utils import str_to_dt, dt_to_str
-from algo_trading.config import DB_INFO, KV_INFO, OBJ_STORE_INFO, CONFIG
+from algo_trading.config import (
+    DB_INFO,
+    KV_INFO,
+    OBJ_STORE_INFO,
+    CONFIG,
+    LOG_BUCKET,
+    LOG_KEY,
+)
 
 
 LOG, LOG_INFO = get_main_logger(
@@ -44,56 +51,99 @@ OBJ_STORE_HANDLER = ObjStoreRepository(
     LOG_INFO,
 ).handler
 
+DEFAULT_START_DATE = "1900-01-02"
 
-def backfill_redis(new_ticker_paths: Dict[str, Dict[str, str]]) -> None:
+
+def backfill_redis(new_tickers: List[str]) -> None:
     """Gets up to date redis data for new tickers to indicate last
     cross dates and status.
 
     Args:
-        new_ticker_paths (Dict): New tickers and paths to download data from.
+        new_tickers (List[str]): New tickers to backfill.
     """
 
-    for ticker, path_dict in new_ticker_paths.items():
-        data = OBJ_STORE_HANDLER.download_fileobj(
-            bucket=path_dict["bucket"],
-            key=path_dict["key"],
-            file_type="df",
-        )
+    for ticker in new_tickers:
+        data = DB_HANDLER.get_all(ticker)
         cross_info = KV_HANDLER.get(ticker)
+
         if cross_info is not None:
-            LOG.info(
-                f"Redis data for {ticker} already exists bum! - resetting to empty..."
-            )
-        cross_info = dict()
-        data = data.sort_values(
-            [ColumnController.date.value], ascending=True
-        ).reset_index(drop=True)
+            LOG.info(f"Redis data for {ticker} already exists bum!")
+            continue
+
+        LOG.info(f"Backfilling cross up/down info for {ticker}")
+
+        cross_info = {
+            ColumnController.last_cross_up.value: None,
+            ColumnController.last_cross_down.value: None,
+            ColumnController.last_status.value: None,
+        }
 
         # Dirty way of finding out last cross up and cross down - can def do better
-        for i in range(1, len(data.index), -1):
+        for i in range(len(data.index) - 1, 1, -1):
             if SMACross.cross_up(data, i):
-                cross_info[ColumnController.last_cross_up.value] = data[
-                    ColumnController.date.value
-                ].iloc[i]
+                cross_info[ColumnController.last_cross_up.value] = dt_to_str(
+                    data[ColumnController.date.value].iloc[i]
+                )
+                LOG.info(
+                    f"Last cross up: {cross_info[ColumnController.last_cross_up.value]}"
+                )
                 break
 
-        for i in range(1, len(data.index), -1):
+        for i in range(len(data.index) - 1, 1, -1):
             if SMACross.cross_down(data, i):
-                cross_info[ColumnController.last_cross_down.value] = data[
-                    ColumnController.date.value
-                ].iloc[i]
+                cross_info[ColumnController.last_cross_down.value] = dt_to_str(
+                    data[ColumnController.date.value].iloc[i]
+                )
+                LOG.info(
+                    f"Last cross down: {cross_info[ColumnController.last_cross_down.value]}"
+                )
                 break
 
-        if str_to_dt(cross_info[ColumnController.last_cross_down.value]) < str_to_dt(
+        # Handling various cases if no cross_ups or cross_downs have occured yet.
+        if (
             cross_info[ColumnController.last_cross_up.value]
+            and not cross_info[ColumnController.last_cross_down.value]
         ):
+            cross_info[ColumnController.last_cross_down.value] = dt_to_str(
+                str_to_dt(cross_info[ColumnController.last_cross_up.value])
+                - timedelta(days=1)
+            )
             cross_info[
                 ColumnController.last_status.value
             ] = StockStatusController.buy.value
-        else:
+        elif (
+            cross_info[ColumnController.last_cross_down.value]
+            and not cross_info[ColumnController.last_cross_up.value]
+        ):
+            cross_info[ColumnController.last_cross_up.value] = dt_to_str(
+                str_to_dt(cross_info[ColumnController.last_cross_down.value])
+                - timedelta(days=1)
+            )
             cross_info[
                 ColumnController.last_status.value
             ] = StockStatusController.sell.value
+        elif (
+            not cross_info[ColumnController.last_cross_down.value]
+            and not cross_info[ColumnController.last_cross_up.value]
+        ):
+            cross_info[ColumnController.last_cross_down.value] = DEFAULT_START_DATE
+            cross_info[ColumnController.last_cross_up.value] = dt_to_str(
+                str_to_dt(DEFAULT_START_DATE) - timedelta(days=1)
+            )
+            cross_info[
+                ColumnController.last_status.value
+            ] = StockStatusController.sell.value
+        else:
+            if str_to_dt(
+                cross_info[ColumnController.last_cross_down.value]
+            ) < str_to_dt(cross_info[ColumnController.last_cross_up.value]):
+                cross_info[
+                    ColumnController.last_status.value
+                ] = StockStatusController.buy.value
+            else:
+                cross_info[
+                    ColumnController.last_status.value
+                ] = StockStatusController.sell.value
 
         KV_HANDLER.set(ticker, cross_info)
         LOG.info(f"Updated Redis for {ticker}: {json.dumps(cross_info, indent=2)}")
@@ -117,10 +167,10 @@ def update_redis(tickers: List, new_tickers: List) -> None:
         cross_info = KV_HANDLER.get(ticker)
 
         if cross_info is None:
-            raise ValueError(f"No Redis data for ticker {ticker}...")
+            LOG.error(f"No Redis data for ticker {ticker}...")
+            continue
 
         cross_info = json.loads(cross_info)
-        LOG.info(f"Current Redis for {ticker}: {json.dumps(cross_info, indent=2)}")
 
         if SMACross.cross_up(data, 0):
             cross_info[ColumnController.last_cross_up.value] = dt_to_str(
@@ -140,22 +190,15 @@ def update_redis(tickers: List, new_tickers: List) -> None:
         LOG.info(f"Updated Redis for {ticker}: {json.dumps(cross_info, indent=2)}")
 
 
-if __name__ == "__main__":
-    pass
+def finish_log() -> None:
+    LOG.info(f"END OF SMA CROSS DAG ON {dt_to_str(datetime.today())}.\n")
 
-    # Loading in and parsing config
-    # config_path = os.path.join(
-    #     os.path.dirname(os.path.realpath(__file__)).replace("dags", "algo_trading"),
-    #     "config/config.yml",
-    # )
-    # config = yl.safe_load(open(config_path, "r"))
-    # tickers = config["ticker_list"]
-    # db_handler = config["db_repo"]
-    # data_handler = config["data_repo"]
-    # kv_handler = config["kv_repo"]
 
-    # LOG.info("testing from sma")
-
-    # backfill_redis(new_ticker_data)
-
-    # update_redis(CONFIG.ticker_list, new_tickers)
+def persist_log() -> None:
+    OBJ_STORE_HANDLER.upload_file(
+        LOG_INFO.file_name,
+        LOG_BUCKET,
+        LOG_KEY.format(
+            log_name=LOG_INFO.log_name, run_date=dt_to_str(datetime.today())
+        ),
+    )

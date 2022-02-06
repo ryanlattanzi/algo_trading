@@ -55,6 +55,7 @@ def create_bucket(bucket_name: str) -> None:
     """
     buckets = OBJ_STORE_HANDLER.list_buckets()
     if bucket_name not in [bucket["Name"] for bucket in buckets["Buckets"]]:
+        LOG.info(f"Creating bucket {bucket_name}")
         OBJ_STORE_HANDLER.create_bucket(bucket_name)
 
 
@@ -90,6 +91,7 @@ def get_new_ticker_data(
     data_pull_params = {
         "start_date": "max",
         "end_date": dt_to_str(datetime.today()),
+        "log_info": LOG_INFO,
     }
 
     for ticker in new_tickers:
@@ -179,12 +181,18 @@ def get_existing_ticker_data(
         #     sys.exit(f"{end_date_str} is a weekend! No run run today boo boo...")
 
         LOG.info(f"Last date entry for {ticker}: {last_date_entry_str}")
+
+        if query_date_str == end_date_str:
+            LOG.info(f"Data for {ticker} already up to date on {end_date_str}.")
+            continue
+
         LOG.info(f"Pulling {ticker} from {query_date_str} to {end_date_str}")
 
         data_pull_params = {
             "ticker": ticker,
             "start_date": query_date_str,
             "end_date": end_date_str,
+            "log_info": LOG_INFO,
         }
 
         stock_df = DataRepository(
@@ -229,9 +237,11 @@ def persist_log() -> None:
     OBJ_STORE_HANDLER.upload_file(
         LOG_INFO.file_name,
         LOG_BUCKET,
-        LOG_KEY.format(run_date=dt_to_str(datetime.today())),
+        LOG_KEY.format(
+            log_name=LOG_INFO.log_name, run_date=dt_to_str(datetime.today())
+        ),
     )
 
 
 def finish_log() -> None:
-    LOG.info(f"SUCCESSFULLY ADDED DATA ON {dt_to_str(datetime.today())}.\n")
+    LOG.info(f"END OF DATA PULL DAG ON {dt_to_str(datetime.today())}.\n")

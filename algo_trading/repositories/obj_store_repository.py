@@ -235,7 +235,7 @@ class S3Repository(AbstractObjStore):
         )
 
         if file_type == "df":
-            return pd.read_csv(data)
+            return pd.read_csv(StringIO(data.getvalue().decode("utf-8")))
         elif file_type == "json":
             return json.loads(data.getvalue().decode("utf-8"))
         else:

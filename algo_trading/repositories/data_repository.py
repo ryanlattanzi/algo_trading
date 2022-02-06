@@ -1,6 +1,7 @@
 from abc import ABC, abstractmethod
 import time
 import sys
+from logging import Logger
 from typing import Dict
 from urllib.error import HTTPError
 import ssl
@@ -11,6 +12,8 @@ from pydantic import validate_arguments
 from dateutil.parser import parse
 
 from algo_trading.config.controllers import DataHandlerController
+from algo_trading.logger.controllers import LogConfig
+from algo_trading.logger.default_logger import get_child_logger
 
 
 ssl._create_default_https_context = ssl._create_unverified_context
@@ -34,6 +37,7 @@ class YahooFinanceDataRepository(AbstractDataRepository):
         ticker: str,
         start_date: str,
         end_date: str,
+        log_info: LogConfig,
         interval: str = "1d",
     ) -> None:
         """Data Repository that hits the Yahoo Finance API endpoint
@@ -43,12 +47,24 @@ class YahooFinanceDataRepository(AbstractDataRepository):
             ticker (str): Ticker to fetch data.
             start_date (str): Get data starting here.
             end_date (str): Get data up until this point (not including).
+            log_info (LogConfig): Info to create a log.
             interval (str, optional): Interval of datapoints. Defaults to "1d".
         """
         self.ticker = ticker
         self.start_date = start_date
         self.end_date = end_date
+        self.log_info = log_info
         self.interval = interval
+
+    @property
+    def log(self) -> Logger:
+        try:
+            return self._log
+        except AttributeError:
+            self._log = get_child_logger(
+                self.log_info.log_name, self.__class__.__name__
+            )
+            return self._log
 
     @property
     def start_period_tuple(self) -> int:
@@ -73,8 +89,8 @@ class YahooFinanceDataRepository(AbstractDataRepository):
         try:
             return pd.read_csv(self.query_string)
         except HTTPError:
-            sys.exit(
-                f"\nCannot pull data for {self.ticker} for dates: "
+            self.log.info(
+                f"\nFailed to pull data for {self.ticker} for dates: "
                 + f"{self.start_date} to {self.end_date}.\n"
             )
 

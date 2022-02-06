@@ -15,7 +15,7 @@ def orchestrate_data_pull_dag() -> Tuple[List[str], Dict[str, Dict[str, str]]]:
         CONFIG.data_repo,
         new_tickers,
     )
-    new_ticker_paths = data_pull_dag.persist_ticker_data(new_ticker_data)
+    _ = data_pull_dag.persist_ticker_data(new_ticker_data)
     existing_ticker_data = data_pull_dag.get_existing_ticker_data(
         CONFIG.data_repo,
         CONFIG.ticker_list,
@@ -24,14 +24,16 @@ def orchestrate_data_pull_dag() -> Tuple[List[str], Dict[str, Dict[str, str]]]:
     _ = data_pull_dag.persist_ticker_data(existing_ticker_data)
     data_pull_dag.finish_log()
     data_pull_dag.persist_log()
-    return new_tickers, new_ticker_paths
+    return new_tickers
 
 
-def orchestrate_sma_cross_dag(new_tickers: List, new_ticker_paths: Dict) -> None:
-    sma_cross_dag.backfill_redis(new_ticker_paths)
+def orchestrate_sma_cross_dag(new_tickers: List) -> None:
+    sma_cross_dag.backfill_redis(new_tickers)
     sma_cross_dag.update_redis(CONFIG.ticker_list, new_tickers)
+    sma_cross_dag.finish_log()
+    sma_cross_dag.persist_log()
 
 
 if __name__ == "__main__":
-    new_tickers, new_ticker_paths = orchestrate_data_pull_dag()
-    orchestrate_sma_cross_dag(new_tickers, new_ticker_paths)
+    new_tickers = orchestrate_data_pull_dag()
+    orchestrate_sma_cross_dag(new_tickers)
