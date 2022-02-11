@@ -11,7 +11,7 @@ from algo_trading.logger.default_logger import get_main_logger
 from algo_trading.logger.controllers import LogConfig, LogLevelController
 from algo_trading.utils.utils import dt_to_str
 from algo_trading.strategies.sma_cross_strat import SMACross
-from algo_trading.strategies.events import BackTestResult
+from algo_trading.config.events import BackTestResult
 from algo_trading.repositories.db_repository import AbstractDBRepository, DBRepository
 from algo_trading.repositories.key_val_repository import KeyValueRepository
 from algo_trading.config.controllers import (
@@ -21,7 +21,7 @@ from algo_trading.config.controllers import (
     StockStatusController,
 )
 from algo_trading.utils.utils import str_to_dt
-from algo_trading.strategies.events import TradeEvent
+from algo_trading.config.events import TradeEvent
 
 LOG, LOG_INFO = get_main_logger(
     log_name="SMA_backtest",
