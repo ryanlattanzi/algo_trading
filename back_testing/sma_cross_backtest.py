@@ -4,11 +4,10 @@ import json
 from typing import Dict, Optional, Union
 import pandas as pd
 from pydantic import validate_arguments
-from logging import Logger
 
 from algo_trading.config.controllers import TestPeriodController
 from algo_trading.logger.default_logger import get_main_logger
-from algo_trading.logger.controllers import LogConfig, LogLevelController
+from algo_trading.logger.controllers import LogLevelController
 from algo_trading.utils.utils import dt_to_str
 from algo_trading.strategies.sma_cross_strat import SMACross
 from algo_trading.config.events import BackTestResult
@@ -19,6 +18,7 @@ from algo_trading.config.controllers import (
     DBHandlerController,
     KeyValueController,
     StockStatusController,
+    SMACrossInfo,
 )
 from algo_trading.utils.utils import str_to_dt
 from algo_trading.config.events import TradeEvent
@@ -251,24 +251,26 @@ class SMACrossBackTester:
             else:
 
                 # Current key/val store for self.ticker
-                curr = json.loads(fake_kv_repo.handler.get(self.ticker))
+                cross_info = SMACrossInfo(
+                    json.loads(fake_kv_repo.handler.get(self.ticker))
+                )
 
                 if SMACross.cross_up(self.price_data[: (idx + 1)], idx):
-                    curr[ColumnController.last_cross_up.value] = dt_to_str(
+                    cross_info.last_cross_up = dt_to_str(
                         self.price_data[ColumnController.date.value].iloc[idx]
                     )
-                    fake_kv_repo.handler.set(self.ticker, curr)
+                    fake_kv_repo.handler.set(self.ticker, cross_info.dict())
 
                 elif SMACross.cross_down(self.price_data[: (idx + 1)], idx):
                     # Checks the case when we had a cross up in bear market
-                    if str_to_dt(
-                        curr[ColumnController.last_cross_down.value]
-                    ) < str_to_dt(curr[ColumnController.last_cross_up.value]):
+                    if str_to_dt(cross_info.last_cross_down) < str_to_dt(
+                        cross_info.last_cross_up
+                    ):
 
-                        curr[ColumnController.last_cross_down.value] = dt_to_str(
+                        cross_info.last_cross_down = dt_to_str(
                             self.price_data[ColumnController.date.value].iloc[idx]
                         )
-                        fake_kv_repo.handler.set(self.ticker, curr)
+                        fake_kv_repo.handler.set(self.ticker, cross_info.dict())
 
                 result: TradeEvent = sma.run()
                 if result.signal == StockStatusController.buy:
