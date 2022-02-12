@@ -9,8 +9,8 @@ from algo_trading.config.controllers import (
     StockStatusController,
     SMACrossInfo,
 )
-from algo_trading.repositories.db_repository import DBRepository
-from algo_trading.repositories.key_val_repository import KeyValueRepository
+from algo_trading.repositories.db_repository import AbstractDBRepository
+from algo_trading.repositories.key_val_repository import AbstractKeyValueRepository
 from algo_trading.utils.utils import str_to_dt
 
 
@@ -18,13 +18,13 @@ class SMACross(AbstractStrategy):
     def __init__(
         self,
         ticker: str,
-        sma_db: DBRepository,
-        cross_db: KeyValueRepository,
+        sma_db: AbstractDBRepository,
+        cross_db: AbstractKeyValueRepository,
     ) -> None:
 
         self.ticker = ticker
-        self.sma_db = sma_db.handler
-        self.cross_db = cross_db.handler
+        self.sma_db = sma_db
+        self.cross_db = cross_db
 
     @property
     def cross_info(self) -> SMACrossInfo:

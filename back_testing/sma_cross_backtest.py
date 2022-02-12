@@ -215,13 +215,14 @@ class SMACrossBackTester:
             self.price_data,
             DBHandlerController.fake,
             LOG_INFO,
-        )
+        ).handler
+
         init_status, init_kv = self._init_fake_key_value()
         fake_kv_repo = KeyValueRepository(
             kv_info=init_kv,
             kv_handler=KeyValueController.fake,
             log_info=LOG_INFO,
-        )
+        ).handler
 
         starting_cap = self.capital
         num_trades = 0
@@ -248,14 +249,12 @@ class SMACrossBackTester:
             else:
 
                 # Current key/val store for self.ticker
-                cross_info = SMACrossInfo(
-                    **json.loads(fake_kv_repo.handler.get(self.ticker))
-                )
+                cross_info = SMACrossInfo(**json.loads(fake_kv_repo.get(self.ticker)))
                 if SMACross.cross_up(self.price_data[: (idx + 1)], idx):
                     cross_info.last_cross_up = dt_to_str(
                         self.price_data[ColumnController.date.value].iloc[idx]
                     )
-                    fake_kv_repo.handler.set(self.ticker, cross_info.dict())
+                    fake_kv_repo.set(self.ticker, cross_info.dict())
 
                 elif SMACross.cross_down(self.price_data[: (idx + 1)], idx):
                     # Checks the case when we had a cross up in bear market
@@ -266,7 +265,7 @@ class SMACrossBackTester:
                         cross_info.last_cross_down = dt_to_str(
                             self.price_data[ColumnController.date.value].iloc[idx]
                         )
-                        fake_kv_repo.handler.set(self.ticker, cross_info.dict())
+                        fake_kv_repo.set(self.ticker, cross_info.dict())
 
                 sma = SMACross(self.ticker, fake_db_repo, fake_kv_repo)
                 result = sma.run()

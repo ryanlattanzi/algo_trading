@@ -30,6 +30,7 @@ def orchestrate_data_pull_dag() -> Tuple[List[str], Dict[str, Dict[str, str]]]:
 def orchestrate_sma_cross_dag(new_tickers: List) -> None:
     sma_cross_dag.backfill_redis(new_tickers)
     sma_cross_dag.update_redis(CONFIG.ticker_list, new_tickers)
+    events = sma_cross_dag.run_sma(CONFIG.ticker_list)
     sma_cross_dag.finish_log()
     sma_cross_dag.persist_log()
 
