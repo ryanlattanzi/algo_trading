@@ -3,8 +3,12 @@ import json
 import pandas as pd
 
 from algo_trading.strategies.abstract_strategy import AbstractStrategy
-from algo_trading.strategies.events import TradeEvent
-from algo_trading.config.controllers import ColumnController, StockStatusController
+from algo_trading.config.events import TradeEvent
+from algo_trading.config.controllers import (
+    ColumnController,
+    StockStatusController,
+    SMACrossInfo,
+)
 from algo_trading.repositories.db_repository import DBRepository
 from algo_trading.repositories.key_val_repository import KeyValueRepository
 from algo_trading.utils.utils import str_to_dt
@@ -23,8 +27,14 @@ class SMACross(AbstractStrategy):
         self.cross_db = cross_db.handler
 
     @property
-    def cross_info(self) -> Dict:
-        return json.loads(self.cross_db.get(self.ticker))
+    def cross_info(self) -> SMACrossInfo:
+        try:
+            return self._cross_info
+        except AttributeError:
+            self._cross_info = SMACrossInfo(
+                **json.loads(self.cross_db.get(self.ticker))
+            )
+            return self._cross_info
 
     @property
     def sma_info(self) -> Dict:
@@ -100,8 +110,8 @@ class SMACross(AbstractStrategy):
             signal (StockStatusController): Enumeration signal.
         """
         current = self.cross_info
-        current[ColumnController.last_status.value] = signal.value
-        self.cross_db.set(self.ticker, current)
+        current.last_status = signal
+        self.cross_db.set(self.ticker, current.dict())
 
     def run(self) -> TradeEvent:
         """Runs the SMACross strategy logic based on the last cross up/down
@@ -110,26 +120,24 @@ class SMACross(AbstractStrategy):
         Returns:
             TradeEvent: Event
         """
-        last_cross_up = str_to_dt(self.cross_info[ColumnController.last_cross_up.value])
-        last_cross_down = str_to_dt(
-            self.cross_info[ColumnController.last_cross_down.value]
-        )
-        last_status = self.cross_info[ColumnController.last_status.value]
+        last_cross_up = str_to_dt(self.cross_info.last_cross_up)
+        last_cross_down = str_to_dt(self.cross_info.last_cross_down)
+        last_status = self.cross_info.last_status
 
         date = self.sma_info[ColumnController.date.value]
 
         if date:
             if last_cross_up > last_cross_down:
-                if last_status == StockStatusController.buy.value:
+                if last_status == StockStatusController.buy:
                     signal = StockStatusController.hold
-                elif last_status == StockStatusController.sell.value:
+                elif last_status == StockStatusController.sell:
                     signal = StockStatusController.buy
                     self._update_last_status(signal)
             else:
-                if last_status == StockStatusController.buy.value:
+                if last_status == StockStatusController.buy:
                     signal = StockStatusController.sell
                     self._update_last_status(signal)
-                elif last_status == StockStatusController.sell.value:
+                elif last_status == StockStatusController.sell:
                     signal = StockStatusController.wait
 
         else:
