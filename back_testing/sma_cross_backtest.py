@@ -1,7 +1,7 @@
 from datetime import timedelta, datetime
 import os
 import json
-from typing import Dict, Optional, Union
+from typing import Dict, Optional, Tuple, Union
 import pandas as pd
 from pydantic import validate_arguments
 
@@ -135,7 +135,7 @@ class SMACrossBackTester:
                 )
             return self._price_data
 
-    def _init_fake_key_value(self) -> Dict:
+    def _init_fake_key_value(self) -> Tuple[StockStatusController, Dict[str, str]]:
         first_day = self.price_data.iloc[0].to_dict()
         if (
             first_day[ColumnController.ma_7.value]
@@ -147,7 +147,7 @@ class SMACrossBackTester:
             last_cross_down = dt_to_str(
                 first_day[ColumnController.date.value] - timedelta(days=2)
             )
-            last_status = StockStatusController.buy.value
+            last_status = StockStatusController.buy
         else:
             last_cross_up = dt_to_str(
                 first_day[ColumnController.date.value] - timedelta(days=2)
@@ -155,17 +155,15 @@ class SMACrossBackTester:
             last_cross_down = dt_to_str(
                 first_day[ColumnController.date.value] - timedelta(days=1)
             )
-            last_status = StockStatusController.sell.value
+            last_status = StockStatusController.sell
 
-        return last_status, {
-            self.ticker: json.dumps(
-                {
-                    ColumnController.last_cross_up.value: last_cross_up,
-                    ColumnController.last_cross_down.value: last_cross_down,
-                    ColumnController.last_status.value: last_status,
-                }
-            )
-        }
+        cross_info = SMACrossInfo(
+            last_cross_up=last_cross_up,
+            last_cross_down=last_cross_down,
+            last_status=last_status,
+        )
+
+        return last_status, {self.ticker: json.dumps(cross_info.dict())}
 
     def _get_num_shares(self, cash: float, share_price: float) -> float:
         """Simple calculation of num shares to buy.
@@ -225,10 +223,9 @@ class SMACrossBackTester:
             log_info=LOG_INFO,
         )
 
-        sma = SMACross(self.ticker, fake_db_repo, fake_kv_repo)
         starting_cap = self.capital
         num_trades = 0
-        if init_status == StockStatusController.buy.value:
+        if init_status == StockStatusController.buy:
             num_shares = self._get_num_shares(
                 self.capital, self.price_data[ColumnController.close.value].iloc[0]
             )
@@ -252,9 +249,8 @@ class SMACrossBackTester:
 
                 # Current key/val store for self.ticker
                 cross_info = SMACrossInfo(
-                    json.loads(fake_kv_repo.handler.get(self.ticker))
+                    **json.loads(fake_kv_repo.handler.get(self.ticker))
                 )
-
                 if SMACross.cross_up(self.price_data[: (idx + 1)], idx):
                     cross_info.last_cross_up = dt_to_str(
                         self.price_data[ColumnController.date.value].iloc[idx]
@@ -272,7 +268,8 @@ class SMACrossBackTester:
                         )
                         fake_kv_repo.handler.set(self.ticker, cross_info.dict())
 
-                result: TradeEvent = sma.run()
+                sma = SMACross(self.ticker, fake_db_repo, fake_kv_repo)
+                result = sma.run()
                 if result.signal == StockStatusController.buy:
                     num_shares = self._get_num_shares(
                         self.capital, row[ColumnController.close.value]

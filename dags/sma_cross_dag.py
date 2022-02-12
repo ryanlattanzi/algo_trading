@@ -121,7 +121,7 @@ def update_redis(tickers: List, new_tickers: List) -> None:
             LOG.error(f"No Redis data for ticker {ticker}...")
             continue
 
-        cross_info = SMACrossInfo(json.loads(cross_info))
+        cross_info = SMACrossInfo(**json.loads(cross_info))
 
         if SMACross.cross_up(data, 0):
             cross_info.last_cross_up = dt_to_str(

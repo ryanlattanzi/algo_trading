@@ -1,5 +1,5 @@
 from abc import ABC, abstractmethod
-from algo_trading.strategies.events import TradeEvent
+from algo_trading.config.events import TradeEvent
 
 
 class AbstractStrategy(ABC):

@@ -31,7 +31,9 @@ class SMACross(AbstractStrategy):
         try:
             return self._cross_info
         except AttributeError:
-            self._cross_info = SMACrossInfo(json.loads(self.cross_db.get(self.ticker)))
+            self._cross_info = SMACrossInfo(
+                **json.loads(self.cross_db.get(self.ticker))
+            )
             return self._cross_info
 
     @property
@@ -126,16 +128,16 @@ class SMACross(AbstractStrategy):
 
         if date:
             if last_cross_up > last_cross_down:
-                if last_status == StockStatusController.buy.value:
+                if last_status == StockStatusController.buy:
                     signal = StockStatusController.hold
-                elif last_status == StockStatusController.sell.value:
+                elif last_status == StockStatusController.sell:
                     signal = StockStatusController.buy
                     self._update_last_status(signal)
             else:
-                if last_status == StockStatusController.buy.value:
+                if last_status == StockStatusController.buy:
                     signal = StockStatusController.sell
                     self._update_last_status(signal)
-                elif last_status == StockStatusController.sell.value:
+                elif last_status == StockStatusController.sell:
                     signal = StockStatusController.wait
 
         else:
