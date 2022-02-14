@@ -198,6 +198,9 @@ def get_existing_ticker_data(
         stock_df = DataRepository(
             data_pull_params, data_handler
         ).handler.get_stock_data()
+        if not stock_df:
+            continue
+
         stock_df = clean_df(stock_df)
         stock_df = stock_df.sort_values([ColumnController.date.value], ascending=True)
         stock_df_first_date = stock_df[ColumnController.date.value][0]

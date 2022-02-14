@@ -17,6 +17,7 @@ from algo_trading.config.controllers import (
     KeyValueController,
     SMACrossInfo,
 )
+from algo_trading.config.events import TradeEvent
 from algo_trading.utils.utils import str_to_dt, dt_to_str
 from algo_trading.config import (
     DB_INFO,
@@ -141,6 +142,25 @@ def update_redis(tickers: List, new_tickers: List) -> None:
         LOG.info(
             f"Updated Redis for {ticker}: {json.dumps(cross_info.dict(), indent=2)}"
         )
+
+
+def run_sma(tickers: List) -> List[TradeEvent]:
+    """Runs the SMA strategy for the given tickers.
+
+    Args:
+        tickers (List): Tickers to analyze with SMA.
+
+    Returns:
+        List[TradeEvent]: TradeEvents based off of algorithm.
+    """
+    events = []
+    for ticker in tickers:
+        sma = SMACross(ticker, DB_HANDLER, KV_HANDLER)
+        result = sma.run()
+        if result.signal in [StockStatusController.buy, StockStatusController.sell]:
+            events.append(result)
+        LOG.info(f"{ticker.upper()} {result.signal.value} Event on {result.date}")
+    return events
 
 
 def finish_log() -> None:
