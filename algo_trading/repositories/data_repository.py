@@ -2,7 +2,7 @@ from abc import ABC, abstractmethod
 import time
 import sys
 from logging import Logger
-from typing import Dict
+from typing import Dict, Optional
 from urllib.error import HTTPError
 import ssl
 from pydantic import validate_arguments
@@ -85,14 +85,15 @@ class YahooFinanceDataRepository(AbstractDataRepository):
             + f"&interval={self.interval}&events=history&includeAdjustedClose=true"
         )
 
-    def get_stock_data(self) -> pd.DataFrame:
+    def get_stock_data(self) -> Optional[pd.DataFrame]:
         try:
             return pd.read_csv(self.query_string)
         except HTTPError:
-            self.log.info(
+            self.log.error(
                 f"\nFailed to pull data for {self.ticker} for dates: "
                 + f"{self.start_date} to {self.end_date}.\n"
             )
+            return None
 
 
 class DataRepository:

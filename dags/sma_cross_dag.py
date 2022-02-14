@@ -159,7 +159,7 @@ def run_sma(tickers: List) -> List[TradeEvent]:
         result = sma.run()
         if result.signal in [StockStatusController.buy, StockStatusController.sell]:
             events.append(result)
-        LOG.info(f"{ticker} {result.signal.value} Event on {result.date}")
+        LOG.info(f"{ticker.upper()} {result.signal.value} Event on {result.date}")
     return events
 
 
