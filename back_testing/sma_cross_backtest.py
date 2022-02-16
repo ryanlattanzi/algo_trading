@@ -307,9 +307,7 @@ class SMACrossBackTester:
             LOG.debug(f"Selling all for a new capital of {self.capital}.")
         percent_change = self._get_percent_change(starting_cap, self.capital)
 
-        LOG.info(f"Successfully backtested SMA Cross for {self.ticker}.\n")
-
-        return BackTestResult(
+        res = BackTestResult(
             ticker=self.ticker,
             start_date=dt_to_str(self.price_data[ColumnController.date.value].iloc[0]),
             end_date=dt_to_str(self.price_data[ColumnController.date.value].iloc[-1]),
@@ -318,6 +316,12 @@ class SMACrossBackTester:
             cap_gains=percent_change,
             num_trades=num_trades,
         )
+
+        LOG.info(
+            f"Successfully backtested SMA Cross for {self.ticker}:\n {json.dumps(res.dict(), indent=2)}\n"
+        )
+
+        return res
 
 
 if __name__ == "__main__":
@@ -333,4 +337,3 @@ if __name__ == "__main__":
         capital=1000,
     )
     result: BackTestResult = tester.test()
-    print(json.dumps(result.dict(), indent=2))

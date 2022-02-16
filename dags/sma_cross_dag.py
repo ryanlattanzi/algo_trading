@@ -2,6 +2,7 @@ import os
 import json
 from typing import List
 from datetime import datetime
+import copy
 
 from algo_trading.logger.default_logger import get_main_logger
 from algo_trading.logger.controllers import LogLevelController
@@ -72,10 +73,11 @@ def backfill_redis(new_tickers: List[str]) -> None:
         LOG.info(f"Backfilling cross up/down info for {ticker}")
 
         init_cross_info = SMACrossInfo()
+        cross_info = copy.deepcopy(init_cross_info)
 
-        # Dirty way of finding out last cross up and cross down - can def do better
+        # TODO: Dirty way of finding out last cross up and cross down - can def do better
         for i in range(len(data.index) - 1, 1, -1):
-            cross_info = SMACrossUtils.check_cross_up(data, i, init_cross_info)
+            cross_info = SMACrossUtils.check_cross_up(data, i, cross_info)
             if cross_info.last_cross_up != init_cross_info.last_cross_up:
                 LOG.info(f"Last cross up: {cross_info.last_cross_up}")
                 break
