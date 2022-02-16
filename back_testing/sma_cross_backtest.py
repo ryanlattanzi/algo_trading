@@ -254,7 +254,6 @@ class SMACrossBackTester:
                     cross_info.last_cross_up = dt_to_str(
                         self.price_data[ColumnController.date.value].iloc[idx]
                     )
-                    fake_kv_repo.set(self.ticker, cross_info.dict())
 
                 elif SMACross.cross_down(self.price_data[: (idx + 1)], idx):
                     # Checks the case when we had a cross up in bear market
@@ -265,7 +264,8 @@ class SMACrossBackTester:
                         cross_info.last_cross_down = dt_to_str(
                             self.price_data[ColumnController.date.value].iloc[idx]
                         )
-                        fake_kv_repo.set(self.ticker, cross_info.dict())
+
+                fake_kv_repo.set(self.ticker, cross_info.dict())
 
                 sma = SMACross(self.ticker, fake_db_repo, fake_kv_repo)
                 result = sma.run()
