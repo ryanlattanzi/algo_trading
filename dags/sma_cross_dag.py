@@ -11,7 +11,6 @@ from algo_trading.repositories.db_repository import DBRepository
 from algo_trading.repositories.key_val_repository import KeyValueRepository
 from algo_trading.repositories.obj_store_repository import ObjStoreRepository
 from algo_trading.config.controllers import (
-    ColumnController,
     StockStatusController,
     ObjStoreController,
     DBHandlerController,

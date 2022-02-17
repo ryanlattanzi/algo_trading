@@ -20,8 +20,7 @@ from algo_trading.config.controllers import (
     StockStatusController,
     SMACrossInfo,
 )
-from algo_trading.utils.utils import str_to_dt
-from algo_trading.config.events import TradeEvent
+
 
 LOG, LOG_INFO = get_main_logger(
     log_name="SMA_backtest",
