@@ -9,7 +9,7 @@ from algo_trading.config.controllers import TestPeriodController
 from algo_trading.logger.default_logger import get_main_logger
 from algo_trading.logger.controllers import LogLevelController
 from algo_trading.utils.utils import dt_to_str
-from algo_trading.strategies.sma_cross_strat import SMACross
+from algo_trading.strategies.sma_cross_strat import SMACross, SMACrossUtils
 from algo_trading.config.events import BackTestResult
 from algo_trading.repositories.db_repository import AbstractDBRepository, DBRepository
 from algo_trading.repositories.key_val_repository import KeyValueRepository
@@ -20,8 +20,7 @@ from algo_trading.config.controllers import (
     StockStatusController,
     SMACrossInfo,
 )
-from algo_trading.utils.utils import str_to_dt
-from algo_trading.config.events import TradeEvent
+
 
 LOG, LOG_INFO = get_main_logger(
     log_name="SMA_backtest",
@@ -136,6 +135,13 @@ class SMACrossBackTester:
             return self._price_data
 
     def _init_fake_key_value(self) -> Tuple[StockStatusController, Dict[str, str]]:
+        """
+        Initializes the fake key,value store depending on the first day
+        of the test data.
+
+        Returns:
+            Tuple[StockStatusController, Dict[str, str]]: Initialized status as a dict.
+        """
         first_day = self.price_data.iloc[0].to_dict()
         if (
             first_day[ColumnController.ma_7.value]
@@ -250,22 +256,20 @@ class SMACrossBackTester:
 
                 # Current key/val store for self.ticker
                 cross_info = SMACrossInfo(**json.loads(fake_kv_repo.get(self.ticker)))
-                if SMACross.cross_up(self.price_data[: (idx + 1)], idx):
-                    cross_info.last_cross_up = dt_to_str(
-                        self.price_data[ColumnController.date.value].iloc[idx]
-                    )
-                    fake_kv_repo.set(self.ticker, cross_info.dict())
 
-                elif SMACross.cross_down(self.price_data[: (idx + 1)], idx):
-                    # Checks the case when we had a cross up in bear market
-                    if str_to_dt(cross_info.last_cross_down) < str_to_dt(
-                        cross_info.last_cross_up
-                    ):
+                cross_info = SMACrossUtils.check_cross_up(
+                    self.price_data[: (idx + 1)],
+                    idx,
+                    cross_info,
+                )
 
-                        cross_info.last_cross_down = dt_to_str(
-                            self.price_data[ColumnController.date.value].iloc[idx]
-                        )
-                        fake_kv_repo.set(self.ticker, cross_info.dict())
+                cross_info = SMACrossUtils.check_cross_down(
+                    self.price_data[: (idx + 1)],
+                    idx,
+                    cross_info,
+                )
+
+                fake_kv_repo.set(self.ticker, cross_info.dict())
 
                 sma = SMACross(self.ticker, fake_db_repo, fake_kv_repo)
                 result = sma.run()
@@ -302,9 +306,7 @@ class SMACrossBackTester:
             LOG.debug(f"Selling all for a new capital of {self.capital}.")
         percent_change = self._get_percent_change(starting_cap, self.capital)
 
-        LOG.info(f"Successfully backtested SMA Cross for {self.ticker}.\n")
-
-        return BackTestResult(
+        res = BackTestResult(
             ticker=self.ticker,
             start_date=dt_to_str(self.price_data[ColumnController.date.value].iloc[0]),
             end_date=dt_to_str(self.price_data[ColumnController.date.value].iloc[-1]),
@@ -313,6 +315,12 @@ class SMACrossBackTester:
             cap_gains=percent_change,
             num_trades=num_trades,
         )
+
+        LOG.info(
+            f"Successfully backtested SMA Cross for {self.ticker}:\n {json.dumps(res.dict(), indent=2)}\n"
+        )
+
+        return res
 
 
 if __name__ == "__main__":
@@ -328,4 +336,3 @@ if __name__ == "__main__":
         capital=1000,
     )
     result: BackTestResult = tester.test()
-    print(json.dumps(result.dict(), indent=2))

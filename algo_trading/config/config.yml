@@ -5,7 +5,7 @@ obj_store_repo: minio
 ticker_list:
   - aapl
   - nio
-#  - fb
-#  - tsla
-#  - msft
-#  - amzn
+  - fb
+  - tsla
+  - msft
+  - amzn

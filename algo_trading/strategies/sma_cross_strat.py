@@ -11,7 +11,100 @@ from algo_trading.config.controllers import (
 )
 from algo_trading.repositories.db_repository import AbstractDBRepository
 from algo_trading.repositories.key_val_repository import AbstractKeyValueRepository
-from algo_trading.utils.utils import str_to_dt
+from algo_trading.utils.utils import dt_to_str, str_to_dt
+
+
+class SMACrossUtils:
+    @staticmethod
+    def check_cross_up(
+        data: pd.DataFrame,
+        index: int,
+        cross_info: SMACrossInfo,
+    ) -> SMACrossInfo:
+        """Checks to see if a cross up occured by looking at
+        the current date 7 and 21 day SMA and the previous date
+        7 and 21 day SMA. Finally, we only consider cross up
+        when the close price > 50 ay SMA otherwise the market
+        is considered bearish.
+
+        **NOTE**
+        We expect the dataframe to be in ASCENDING order by date.
+
+        Args:
+            data (pd.DataFrame): Data to parse SMA info.
+            index (int): Indicates current day. index + 1 = prev day.
+            cross_info (SMACrossInfo): Current cross info to analyze.
+
+        Returns:
+            SMACrossInfo: Updated (or not) SMACrossInfo object.
+        """
+        if (
+            (
+                data[ColumnController.ma_7.value].iloc[index]
+                >= data[ColumnController.ma_21.value].iloc[index]
+            )
+            and (
+                data[ColumnController.ma_7.value].iloc[index - 1]
+                < data[ColumnController.ma_21.value].iloc[index - 1]
+            )
+            and (
+                data[ColumnController.close.value].iloc[index]
+                > data[ColumnController.ma_50.value].iloc[index]
+            )
+        ):
+            cross_info.last_cross_up = dt_to_str(
+                data[ColumnController.date.value].iloc[index]
+            )
+
+        return cross_info
+
+    @staticmethod
+    def check_cross_down(
+        data: pd.DataFrame,
+        index: int,
+        cross_info: SMACrossInfo,
+    ) -> SMACrossInfo:
+        """
+        Checks to see if a cross down occured by looking at
+        the current date 7 and 21 day SMA and the previous date
+        7 and 21 day SMA.
+
+        **DEPENDENT ON CHECK_CROSS_UP**
+        Because we double check if a cross up occured below the sma_50
+        so it wasn't considered/logged. In that case, the last_cross_up
+        would still be less than last_cross_down. So if that is the case,
+        we also ignore the cross down following the unlogged cross up.
+
+        **NOTE**
+        We expect the dataframe to be in ASCENDING order by date.
+
+        Args:
+            data (pd.DataFrame): Data to parse SMA info.
+            index (int): Indicates current day. index + 1 = prev day.
+            cross_info (SMACrossInfo): Cross info to update.
+
+        Returns:
+            SMACrossInfo: Updated SMACross info object.
+        """
+        if (
+            (
+                data[ColumnController.ma_7.value].iloc[index]
+                < data[ColumnController.ma_21.value].iloc[index]
+            )
+            and (
+                data[ColumnController.ma_7.value].iloc[index - 1]
+                >= data[ColumnController.ma_21.value].iloc[index - 1]
+            )
+            and (
+                str_to_dt(cross_info.last_cross_down)
+                < str_to_dt(cross_info.last_cross_up)
+            )
+        ):
+            cross_info.last_cross_down = dt_to_str(
+                data[ColumnController.date.value].iloc[index]
+            )
+
+        return cross_info
 
 
 class SMACross(AbstractStrategy):
@@ -44,63 +137,6 @@ class SMACross(AbstractStrategy):
         except IndexError:
             data = {ColumnController.date.value: None}
         return data
-
-    @staticmethod
-    def cross_up(data: pd.DataFrame, index: int) -> bool:
-        """Checks to see if a cross up occured by looking at
-        the current date 7 and 21 day SMA and the previous date
-        7 and 21 day SMA. Finally, we only consider cross up
-        when the close price > 50 ay SMA otherwise the market
-        is considered bearish.
-
-        **NOTE**
-        We expect the dataframe to be in ASCENDING order by date.
-
-        Args:
-            data (pd.DataFrame): Data to parse SMA info.
-            index (int): Indicates current day. index + 1 = prev day.
-
-        Returns:
-            bool: True if all conditions are met.
-        """
-        return (
-            (
-                data[ColumnController.ma_7.value].iloc[index]
-                >= data[ColumnController.ma_21.value].iloc[index]
-            )
-            and (
-                data[ColumnController.ma_7.value].iloc[index - 1]
-                < data[ColumnController.ma_21.value].iloc[index - 1]
-            )
-            and (
-                data[ColumnController.close.value].iloc[index]
-                > data[ColumnController.ma_50.value].iloc[index]
-            )
-        )
-
-    @staticmethod
-    def cross_down(data: pd.DataFrame, index: int) -> bool:
-        """Checks to see if a cross down occured by looking at
-        the current date 7 and 21 day SMA and the previous date
-        7 and 21 day SMA.
-
-        **NOTE**
-        We expect the dataframe to be in ASCENDING order by date.
-
-        Args:
-            data (pd.DataFrame): Data to parse SMA info.
-            index (int): Indicates current day. index + 1 = prev day.
-
-        Returns:
-            bool: True if all conditions are met.
-        """
-        return (
-            data[ColumnController.ma_7.value].iloc[index]
-            < data[ColumnController.ma_21.value].iloc[index]
-        ) and (
-            data[ColumnController.ma_7.value].iloc[index - 1]
-            >= data[ColumnController.ma_21.value].iloc[index - 1]
-        )
 
     def _update_last_status(self, signal: StockStatusController) -> None:
         """Updates the ast_status value to the given signal for the

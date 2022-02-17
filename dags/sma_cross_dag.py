@@ -2,15 +2,15 @@ import os
 import json
 from typing import List
 from datetime import datetime
+import copy
 
 from algo_trading.logger.default_logger import get_main_logger
 from algo_trading.logger.controllers import LogLevelController
-from algo_trading.strategies.sma_cross_strat import SMACross
+from algo_trading.strategies.sma_cross_strat import SMACross, SMACrossUtils
 from algo_trading.repositories.db_repository import DBRepository
 from algo_trading.repositories.key_val_repository import KeyValueRepository
 from algo_trading.repositories.obj_store_repository import ObjStoreRepository
 from algo_trading.config.controllers import (
-    ColumnController,
     StockStatusController,
     ObjStoreController,
     DBHandlerController,
@@ -71,22 +71,19 @@ def backfill_redis(new_tickers: List[str]) -> None:
 
         LOG.info(f"Backfilling cross up/down info for {ticker}")
 
-        cross_info = SMACrossInfo()
+        init_cross_info = SMACrossInfo()
+        cross_info = copy.deepcopy(init_cross_info)
 
-        # Dirty way of finding out last cross up and cross down - can def do better
+        # TODO: Dirty way of finding out last cross up and cross down - can def do better
         for i in range(len(data.index) - 1, 1, -1):
-            if SMACross.cross_up(data, i):
-                cross_info.last_cross_up = dt_to_str(
-                    data[ColumnController.date.value].iloc[i]
-                )
+            cross_info = SMACrossUtils.check_cross_up(data, i, cross_info)
+            if cross_info.last_cross_up != init_cross_info.last_cross_up:
                 LOG.info(f"Last cross up: {cross_info.last_cross_up}")
                 break
 
         for i in range(len(data.index) - 1, 1, -1):
-            if SMACross.cross_down(data, i):
-                cross_info.last_cross_down = dt_to_str(
-                    data[ColumnController.date.value].iloc[i]
-                )
+            cross_info = SMACrossUtils.check_cross_down(data, i, cross_info)
+            if cross_info.last_cross_down != init_cross_info.last_cross_down:
                 LOG.info(f"Last cross down: {cross_info.last_cross_down}")
                 break
 
@@ -124,19 +121,8 @@ def update_redis(tickers: List, new_tickers: List) -> None:
 
         cross_info = SMACrossInfo(**json.loads(cross_info))
 
-        if SMACross.cross_up(data, 0):
-            cross_info.last_cross_up = dt_to_str(
-                data[ColumnController.date.value].iloc[0]
-            )
-
-        elif SMACross.cross_down(data, 0):
-            # Checks the case when we had a cross up in bear market
-            if str_to_dt(cross_info.last_cross_down) < str_to_dt(
-                cross_info.last_cross_up
-            ):
-                cross_info.last_cross_down = dt_to_str(
-                    data[ColumnController.date.value].iloc[0]
-                )
+        cross_info = SMACrossUtils.check_cross_up(data, 0, cross_info)
+        cross_info = SMACrossUtils.check_cross_down(data, 0, cross_info)
 
         KV_HANDLER.set(ticker, cross_info.dict())
         LOG.info(
