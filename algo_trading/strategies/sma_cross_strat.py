@@ -96,7 +96,6 @@ class SMACrossUtils:
                 >= data[ColumnController.ma_21.value].iloc[index - 1]
             )
             and (
-                # TODO: Should we change this to > ???
                 str_to_dt(cross_info.last_cross_down)
                 < str_to_dt(cross_info.last_cross_up)
             )
