@@ -4,7 +4,7 @@ The goal of this application is two-fold:
 1. To practice general python/systems engineering in a greenfield environment. Notably, the main patterns and use of interfaces ('repositories') come from the phenominal read [Architecture Patterns with Python](https://www.amazon.com/Architecture-Patterns-Python-Domain-Driven-Microservices/dp/1492052205).
 2. To see if we can make a little money off the stock market. Yes, we know we should buy and hold VOO (which we do), but why not have a little fun in Robinhood like the rest of the Gen Z TikTok prodigies? 
 
-This app is not an automated trading app. However, it does everything an automated trading system does *except* trade. Rather, the goal is to have an email subscription service by which information will be shared, i.e. "Now is a good time to buy stock B according to strategy S". Although it is now possible for the sub-par meme-stock middle-school retail investor to conduct automated day trading via [Alpaca](https://alpaca.markets/), we don't want [this](https://en.wikipedia.org/wiki/2010_flash_crash) to happen to our already-hurting portfolios.
+This app is not an automated trading app. However, it does everything an automated trading system does *except* trade. Rather, the goal is to have an email subscription service by which information will be shared, i.e. "Now is a good time to buy stock **B** according to strategy **S**". Although it is now possible for the sub-par meme-stock middle-school retail investor to conduct automated day trading via [Alpaca](https://alpaca.markets/), we don't want [this](https://en.wikipedia.org/wiki/2010_flash_crash) to happen to our already-hurting portfolios.
 
 Below you will find info on how to clone this repo, how things are organized, and things we plan to accomplish in the future.
 
@@ -27,9 +27,9 @@ When prompted for username and password, paste the access token instead of the p
 
 To start your local environment, run the command
 ```
-./startup.sh
+make start
 ```
-and most likely respond `y` to the prompt, which asks if you would like to wipe the Docker volumes clean for a fresh start.
+which wipes the Docker volumes clean for a completely fresh start.
 
 Now, Postgres should be running on port `5432` with name `algo_trading_postgres_1`, PGAdmin should be running on port `80` (UI on `localhost:80`) with name `algo_trading_pgadmin_1`, and MinIO on port `9001` with name `algo_trading_minio_1` (UI on `localhost:9001`).
 
@@ -37,9 +37,11 @@ Finally, you must create a `logs` folder under the directory `dags` and another 
 
 # Running The App
 
-For now, there are 2 entrypoints into the system: `dags/data_pull_dag.py` and `back_testing/sma_cross_backtest.py`. Both directories contain their own `README.md` to explain the components and how they work. The directory `algo_trading` includes all the source code that both entrypoints make use of. Within `algo_trading/config/config.yml`, you will find values to bootstrap the entrypoints with configurations on which tickers to analyze, which database backend to use, etc.
+For now, there are 2 entrypoints into the system: `dags/orchestrate.py` which runs all of the DAGs in succession, and `back_testing/sma_cross_backtest.py`. The directory `algo_trading` includes all the source code that both entrypoints make use of. Within `algo_trading/config/config.yml`, you will find values to bootstrap the entrypoints with configurations on which tickers to analyze, which database backend to use, etc.
 
-For now, the best way to execute the program is `python3 data_pull_dag.py` or `python3 sma_cross_backtest.py`. Please see the next section on how we plan on making this more beefy.
+For now, the best way to execute the program is `make test` for dev purposes. It will run `orchestrate.py` to populate the database, and then run `sma_cross_backtest.py` to ensure everything works. More specific unit tests are on the agenda...
+
+For prod, please see the next section on how we plan on making this more beefy.
 
 # Future Endeavors
 
