@@ -93,7 +93,7 @@ class YahooFinanceDataRepository(AbstractDataRepository):
                 f"\nFailed to pull data for {self.ticker} for dates: "
                 + f"{self.start_date} to {self.end_date}.\n"
             )
-            return None
+            return pd.DataFrame()
 
 
 class DataRepository:

@@ -94,7 +94,7 @@ def backfill_redis(new_tickers: List[str]) -> None:
 
         KV_HANDLER.set(ticker, cross_info.dict())
         LOG.info(
-            f"Updated Redis for {ticker}: {json.dumps(cross_info.dict(), indent=2)}"
+            f"Backfilled Redis for {ticker}: {json.dumps(cross_info.dict(), indent=2)}"
         )
 
 

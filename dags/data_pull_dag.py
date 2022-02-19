@@ -198,7 +198,7 @@ def get_existing_ticker_data(
         stock_df = DataRepository(
             data_pull_params, data_handler
         ).handler.get_stock_data()
-        if not stock_df:
+        if len(stock_df) == 0:
             continue
 
         stock_df = clean_df(stock_df)
