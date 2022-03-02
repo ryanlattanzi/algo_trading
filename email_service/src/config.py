@@ -3,6 +3,9 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
+# Log level
+LOG_LEVEL = getenv("LOG_LEVEL")
+
 # Loading in email server info
 SMTP_SERVER = getenv("SMTP_SERVER")
 SSL_PORT = getenv("SSL_PORT")

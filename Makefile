@@ -1,13 +1,13 @@
 
 # Starts environment from scratch.
 start:
-	./bin/startup.sh new
+	./bin/start_env.sh new
 
-# Stops environment.
-stop:
-	./bin/stop.sh
+# Kills environment.
+kill:
+	./bin/kill_env.sh
 
 # Integration test.
 test:
-	./bin/integration_test.sh
+	./bin/test_integration.sh
 

@@ -1,0 +1,20 @@
+FROM python:3.8-slim-buster
+
+RUN apt-get update && apt-get -y install gcc
+COPY requirements.txt /
+RUN pip install --upgrade pip && pip install -r /requirements.txt
+
+# Copying algo_trading "package" and adding to PYTHONPATH
+# We will want to change this to a pip install from a package manager later...
+COPY algo_trading /algo_trading
+ENV PYTHONPATH "${PYTHONPATH}:/algo_trading"
+
+# Copying notification service src
+COPY ./email_service/src /app/src
+COPY ./email_service/bin /app/bin
+COPY ./email_service/app.py /app
+
+WORKDIR /app
+
+CMD ["./bin/start_notification.sh"]
+EXPOSE 8000

@@ -1,8 +1,5 @@
 #!/bin/bash
 
-# If arg "new" is supplied, tear down the env
-# and start from scratch.
-
 CONTAINER="algo_trading"
 SECONDS=0
 
@@ -15,7 +12,7 @@ if [ "${from_scratch}" = "y" ]
         echo "Tearing down and building from scratch..."
         say integration testing this bih from scratch
 
-        ./bin/startup.sh new &
+        ./bin/start_env.sh new &
 
         # Waits until pgadmin is up and running, which is the container
         # that takes longest to stand up.
@@ -28,10 +25,15 @@ if [ "${from_scratch}" = "y" ]
 
 fi
 
-#Orchestrating the DAGs
+# Orchestrating the DAGs
 cd ./dags
 python orchestrate.py
 
-#Backtesting
+# Backtesting
 cd ../back_testing
 python sma_cross_backtest.py
+
+# Testing the notification API by sending
+# a few curl commands
+cd ../bin
+./test_notification.sh
