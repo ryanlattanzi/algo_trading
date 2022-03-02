@@ -324,7 +324,7 @@ class SMACrossBackTester:
 
 
 if __name__ == "__main__":
-    from algo_trading.config import DB_INFO
+    from config import DB_INFO
 
     ticker = "aapl"
     tester = SMACrossBackTester(
