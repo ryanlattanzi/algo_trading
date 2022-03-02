@@ -1,4 +1,4 @@
-version: '3.4'
+version: '3.7'
 
 volumes:
   postgres_data: null
@@ -8,6 +8,17 @@ networks:
   algo_trading_network: null
 
 services:
+  notification:
+    build:
+      context: .
+      dockerfile: Dockerfile.notification
+    env_file:
+      - ./email_service/.env
+    ports:
+      - 8000:8000
+    networks:
+      - algo_trading_network
+
   postgres:
     image: postgres:10
     volumes:

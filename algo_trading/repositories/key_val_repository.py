@@ -40,7 +40,7 @@ class AbstractKeyValueRepository(ABC):
         """
         pass
 
-    @staticmethod
+    @abstractmethod
     def get(self, key: str) -> Optional[str]:
         """Gets the value associated with the given key.
 
@@ -78,7 +78,7 @@ class RedisRepository(AbstractKeyValueRepository):
             return self._conn
 
     def set(self, key: str, value: Union[str, Dict]) -> None:
-        if type(value) == dict:
+        if isinstance(value, dict) or isinstance(value, list):
             value = json.dumps(value)
         self.conn.set(key, value)
         self.log.debug(f"Successfully updated {key} to {value}")
