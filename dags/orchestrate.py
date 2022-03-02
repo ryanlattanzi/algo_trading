@@ -1,8 +1,8 @@
 from typing import List
 
-from algo_trading.config import CONFIG, DATA_BUCKET, LOG_BUCKET
 from algo_trading.config.events import TradeEvent
 
+from config import CONFIG, DATA_BUCKET, LOG_BUCKET
 import data_pull_dag
 import sma_cross_dag
 

@@ -3,7 +3,8 @@ from datetime import datetime
 import pandas as pd
 
 from algo_trading.config.controllers import ColumnController
-from algo_trading.config import DATE_FORMAT
+
+DATE_FORMAT = "%Y-%m-%d"
 
 
 def clean_df(df: pd.DataFrame) -> pd.DataFrame:
