@@ -7,7 +7,6 @@ import pandas as pd
 from abc import ABC, abstractmethod, abstractproperty
 from pydantic import validate_arguments
 
-from algo_trading.config import OBJ_STORE_INFO
 from algo_trading.config.controllers import ObjStoreController
 from algo_trading.logger.controllers import LogConfig
 from algo_trading.logger.default_logger import get_child_logger

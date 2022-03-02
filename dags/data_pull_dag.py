@@ -16,7 +16,8 @@ from algo_trading.config.controllers import (
     ObjStoreController,
 )
 from algo_trading.utils.utils import clean_df, str_to_dt, dt_to_str
-from algo_trading.config import (
+
+from config import (
     DB_INFO,
     DATE_FORMAT,
     OBJ_STORE_INFO,

@@ -19,7 +19,8 @@ from algo_trading.config.controllers import (
 )
 from algo_trading.config.events import TradeEvent
 from algo_trading.utils.utils import str_to_dt, dt_to_str
-from algo_trading.config import (
+
+from config import (
     DB_INFO,
     KV_INFO,
     OBJ_STORE_INFO,
