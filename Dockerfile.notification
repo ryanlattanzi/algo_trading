@@ -1,7 +1,7 @@
 FROM python:3.8-slim-buster
 
 RUN apt-get update && apt-get -y install gcc
-COPY requirements.txt /
+COPY ./email_service/requirements.txt /
 RUN pip install --upgrade pip && pip install -r /requirements.txt
 
 # Copying algo_trading "package" and adding to PYTHONPATH
