@@ -31,21 +31,28 @@ make start
 ```
 which wipes the Docker volumes clean for a completely fresh start.
 
-Now, Postgres should be running on port `5432` with name `algo_trading_postgres_1`, PGAdmin should be running on port `80` (UI on `localhost:80`) with name `algo_trading_pgadmin_1`, and MinIO on port `9001` with name `algo_trading_minio_1` (UI on `localhost:9001`).
+Now,
+- Postgres should be running on port `5432` with name `algo_trading-postgres-1`
+- PGAdmin should be running on port `80` (UI on `localhost:80`) with name `algo_trading-pgadmin-1`
+- MinIO on port `9001` with name `algo_trading-minio-1` (UI on `localhost:9001`)
+- Redis on port `6379` with name `algo_trading-redis-1`
+- Notification Service on port `8000` with name `algo_trading-notification-1` (Swagger docs on `localhost:8000/docs`)
 
 Finally, you must create a `logs` folder under the directory `dags` and another one under `back_testing`.
 
 # Running The App
 
-For now, there are 2 entrypoints into the system: `dags/orchestrate.py` which runs all of the DAGs in succession, and `back_testing/sma_cross_backtest.py`. The directory `algo_trading` includes all the source code that both entrypoints make use of. Within `algo_trading/config/config.yml`, you will find values to bootstrap the entrypoints with configurations on which tickers to analyze, which database backend to use, etc.
+For now, there are 2 entrypoints into the system: `dags/orchestrate.py` which runs all of the DAGs in succession, and `back_testing/sma_cross_backtest.py`. The directory `algo_trading` includes all the source code that both entrypoints make use of. Within `back_testing/config`, `dags/config`, and `email_service/src`, you will find configuration values to bootstrap the entrypoints with which tickers to analyze, which database backend to use, etc.
 
-For now, the best way to execute the program is `make test` for dev purposes. It will run `orchestrate.py` to populate the database, and then run `sma_cross_backtest.py` to ensure everything works. More specific unit tests are on the agenda...
+For now, the best way to execute the program is `make test` for dev purposes. It will run `orchestrate.py` to populate the database, `sma_cross_backtest.py` to backtest a given ticker over time, and `./bin/test_notification.sh` to send a few curl commands to the notification service. More specific unit tests are on the agenda...
+
+Importantly, in order to ensure that the microservices are using the most up-to-date code in `algo_trading`, you should run `make dist`, which will generate a whl file in `./dist` and reference that file in each of the Dockerfiles. We aren't worried too much about package versions for now...but that's on the list. (If you desire to change the package version, just peep `setup.py` in the root dir.)
 
 For prod, please see the next section on how we plan on making this more beefy.
 
 # Future Endeavors
 
-- As stated above, we plan to make these entrypoints more robust than your elementary `python3 data_pull_dag.py` commands by perhaps deploying the `dags` folder to an Airflow environment (or maybe something more compact and cheaper...) and Dockerizing the `back_testing` folder as a microservice. To make `algo_trading` more usable for all systems, perhaps we could deploy it as a package to pypi and include it in other environments' `requirements.txt`.
+- As stated above, we plan to make these entrypoints more robust than your elementary `python3 data_pull_dag.py` commands by perhaps deploying the `dags` folder to an Airflow environment (or maybe something more compact and cheaper...) and Dockerizing the `back_testing` folder as a microservice.
 - As it stands, we currently only have the Simple Moving Average (SMA) strategy. We want to add more strategies obviously, and we tried to architect the system such that the strategies have a fixed input and output (by using interfaces) so that they can be plugged in simply by a change of configuration.
 - Create a subscription UI that allows users to select tickers that they are interested in monitoring. To determine the appropriate strategy, we will recommend one (based off past price movement, back-testing all strategies and choosing the one that performs best, or some other method) or have the user manually choose one. It should be entirely possible to analyze a given ticker with more than one strategy. Users should also be able to toy around with backtesting the strategies here.
 - Transition some of these pieces to Golang and GRPC to make it faster.

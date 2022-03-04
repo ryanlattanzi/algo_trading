@@ -9,7 +9,7 @@ from algo_trading.logger.controllers import LogLevelController
 from algo_trading.repositories.key_val_repository import KeyValueRepository
 from algo_trading.config.controllers import KeyValueController
 
-from config import (
+from .config import (
     SMTP_SERVER,
     SSL_PORT,
     SENDER_EMAIL,

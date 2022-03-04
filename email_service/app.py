@@ -7,6 +7,11 @@ from src import implementation
 from src.template import EMAIL_ALERT_MESSAGE
 from src.controllers import NotificationPayload
 
+"""
+API Design based off of:
+https://stackoverflow.com/questions/12310442/how-to-design-rest-api-for-email-sending-service
+"""
+
 app = FastAPI()
 
 
@@ -26,7 +31,7 @@ def list_tickers() -> Dict:
     }
 
 
-@app.put("/tickers")
+@app.post("/tickers")
 def add_ticker(ticker: str) -> Dict:
     """
     Adds a new ticker with an empty email list.
@@ -87,7 +92,7 @@ def add_users(ticker: str, new_users: List[str]) -> Dict:
     }
 
 
-@app.post("/tickers/{ticker}")
+@app.post("/notification/{ticker}/send")
 def send_notification(
     ticker: str,
     payload: NotificationPayload,
