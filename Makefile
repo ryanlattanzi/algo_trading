@@ -11,3 +11,7 @@ kill:
 test:
 	./bin/test_integration.sh
 
+# Builds new algo_trading package
+.PHONY: dist
+dist:
+	./bin/make_dist.sh

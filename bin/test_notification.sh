@@ -3,20 +3,21 @@
 # NEED TO HAVE STARTED THE DATABASES AND API SERVER #
 
 echo "Adding AAPL to the email manager"
-curl -X 'PUT' \
-  'http://127.0.0.1:8000/tickers?ticker=AAPL' \
-  -H 'accept: application/json'
+curl -X 'POST' \
+  'http://localhost:8000/tickers?ticker=AAPL' \
+  -H 'accept: application/json' \
+  -d ''
 echo
 
 echo "Listing all tickers (ensure AAPL is in there)"
 curl -X 'GET' \
-  'http://127.0.0.1:8000/tickers' \
+  'http://localhost:8000/tickers' \
   -H 'accept: application/json'
 echo
 
 echo "Adding test email as an AAPL subscriber"
 curl -X 'PUT' \
-  'http://127.0.0.1:8000/tickers/AAPL' \
+  'http://localhost:8000/tickers/AAPL' \
   -H 'accept: application/json' \
   -H 'Content-Type: application/json' \
   -d '[
@@ -32,12 +33,12 @@ echo
 
 echo "Sending an email to the users subscribed to AAPL"
 curl -X 'POST' \
-  'http://127.0.0.1:8000/tickers/AAPL' \
+  'http://localhost:8000/notification/AAPL/send' \
   -H 'accept: application/json' \
   -H 'Content-Type: application/json' \
   -d '{
   "signal": "BUY",
   "strategy": "SMACross",
-  "date": "2022-02-26",
+  "date": "2022-03-04",
   "test": false
 }'

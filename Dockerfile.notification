@@ -4,10 +4,12 @@ RUN apt-get update && apt-get -y install gcc
 COPY ./email_service/requirements.txt /
 RUN pip install --upgrade pip && pip install -r /requirements.txt
 
-# Copying algo_trading "package" and adding to PYTHONPATH
-# We will want to change this to a pip install from a package manager later...
-COPY algo_trading /algo_trading
-ENV PYTHONPATH "${PYTHONPATH}:/algo_trading"
+ENV PYTHONDONTWRITEBYTECODE 1
+ENV PYTHONUNBUFFERED 1
+
+# Installing algo_trading whl file
+COPY ./dist/algo_trading-0.1.0-py3-none-any.whl /
+RUN pip install /algo_trading-0.1.0-py3-none-any.whl
 
 # Copying notification service src
 COPY ./email_service/src /app/src
@@ -15,6 +17,6 @@ COPY ./email_service/bin /app/bin
 COPY ./email_service/app.py /app
 
 WORKDIR /app
+EXPOSE 8000
 
 CMD ["./bin/start_notification.sh"]
-EXPOSE 8000
