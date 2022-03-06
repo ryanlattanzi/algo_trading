@@ -1,0 +1,22 @@
+FROM python:3.8-slim-buster
+
+RUN apt-get update && apt-get -y install gcc
+COPY ./back_testing/requirements.txt /
+RUN pip install --upgrade pip && pip install -r /requirements.txt
+
+ENV PYTHONDONTWRITEBYTECODE 1
+ENV PYTHONUNBUFFERED 1
+
+# Installing algo_trading whl file
+COPY ./dist/algo_trading-0.1.0-py3-none-any.whl /
+RUN pip install /algo_trading-0.1.0-py3-none-any.whl
+
+# Copying back_testing service src
+COPY ./back_testing/src /app/src
+COPY ./back_testing/bin /app/bin
+COPY ./back_testing/app.py /app
+
+WORKDIR /app
+EXPOSE 8005
+
+CMD ["./bin/start_backtester.sh"]
