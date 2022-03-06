@@ -155,8 +155,6 @@ class AbstractDBRepository(ABC):
 
 
 class FakeDBRepository(AbstractDBRepository):
-    idx_iterator = 0
-
     def __init__(self, data: pd.DataFrame, log_info: LogConfig) -> None:
         """Fake DB repo that accepts data as a DF to act as
         the table in the live price DB. The DF is in ASCENDING
@@ -171,6 +169,7 @@ class FakeDBRepository(AbstractDBRepository):
         """
         self.data = data
         self.log_info = log_info
+        self.idx_iterator = 0
 
     def create_new_ticker_tables(self, tickers: List[str]) -> List:
         pass
@@ -182,7 +181,7 @@ class FakeDBRepository(AbstractDBRepository):
             start_idx = self.idx_iterator - days_back
 
         data = self.data.iloc[start_idx : (self.idx_iterator)]
-        FakeDBRepository.idx_iterator += 1
+        self.idx_iterator += 1
         return data
 
     def get_since_date(self, ticker: str, date: str) -> pd.DataFrame:
