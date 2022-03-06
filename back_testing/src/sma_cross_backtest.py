@@ -1,16 +1,15 @@
 from datetime import timedelta, datetime
 import os
 import json
-from typing import Dict, Optional, Tuple, Union
+from typing import Dict, Optional, Tuple
 import pandas as pd
 from pydantic import validate_arguments
 
-from algo_trading.config.controllers import TestPeriodController
+
 from algo_trading.logger.default_logger import get_main_logger
 from algo_trading.logger.controllers import LogLevelController
 from algo_trading.utils.utils import dt_to_str
 from algo_trading.strategies.sma_cross_strat import SMACross, SMACrossUtils
-from algo_trading.config.events import BackTestResult
 from algo_trading.repositories.db_repository import AbstractDBRepository, DBRepository
 from algo_trading.repositories.key_val_repository import KeyValueRepository
 from algo_trading.config.controllers import (
@@ -21,76 +20,38 @@ from algo_trading.config.controllers import (
     SMACrossInfo,
 )
 
+from .controllers import BackTestPayload, BackTestResult
+from .config import DB_INFO, DB_HANDLER
+
+# TODO: PERSIST LOGS TO MINIO BUCKET
+
 
 LOG, LOG_INFO = get_main_logger(
     log_name="SMA_backtest",
-    file_name=os.path.join("logs", f"SMA_backtest_{dt_to_str(datetime.today())}.log"),
+    # file_name=os.path.join("/logs", f"SMA_backtest_{dt_to_str(datetime.today())}.log"),
+    file_name=None,
     log_level=LogLevelController.info,
 )
 
 
 class SMACrossBackTester:
-
-    _days_back = {
-        TestPeriodController.one_mo: 30,
-        TestPeriodController.three_mo: 90,
-        TestPeriodController.six_mo: 180,
-        TestPeriodController.one_yr: 365,
-        TestPeriodController.two_yr: 730,
-        TestPeriodController.five_yr: 1825,
-        TestPeriodController.ten_yr: 3650,
-        TestPeriodController.max: "max",
-    }
-
     @validate_arguments(config=dict(arbitrary_types_allowed=True))
     def __init__(
         self,
-        ticker: str,
-        db_info: Dict,
-        db_handler: DBHandlerController,
-        period: Optional[TestPeriodController] = None,
-        start_date: Optional[str] = None,
-        capital: int = 10000,
+        payload: BackTestPayload,
     ) -> None:
-        """Initializer for the SMA Back tester. Provide EITHER
-        a period OR a start_date, but not both.
+        """
+        SMACross Backtesting class. Entrypoint is the test() method.
 
         Args:
-            ticker (str): Ticker to test
-            db_info (Dict): Live DB to query to get price history data
-            db_handler (DBHandlerController): Type of live DB.
-            period (Optional[TestPeriodController], optional): Period to test. Defaults to None.
-            start_date (Optional[str], optional): Start date to test. Defaults to None.
-            capital (int, optional): Starting cash. Defaults to 10000.
-
-        Raises:
-            ValueError: Error if both period and start_date are supplied.
+            payload (BackTestPayload): Pydantic paylod model.
         """
-        self.ticker = ticker
-        self.db_info = db_info
-        self.db_handler = db_handler
-        self.period = period
-        self.start_date = start_date
-        self.capital = capital
-
-        if self.period and self.start_date:
-            raise ValueError("Please include either a period or a start date, not both")
+        self.ticker = payload.ticker
+        self.start_date = payload.start_date
+        self.starting_capital = payload.starting_capital
 
         self.fake_db_repo = None
         self.fake_kv_repo = None
-
-    @property
-    def days_back(self) -> Union[int, str, None]:
-        """Returns the number of days to query back if a period
-        is supplied to the class.
-
-        Returns:
-            Union[int, str, None]: Returns None, integer, or 'max'
-        """
-        if self.period:
-            return SMACrossBackTester._days_back[self.period]
-        else:
-            return None
 
     @property
     def db_repo(self) -> AbstractDBRepository:
@@ -103,8 +64,8 @@ class SMACrossBackTester:
             return self._db_repo
         except AttributeError:
             self._db_repo = DBRepository(
-                self.db_info,
-                self.db_handler,
+                DB_INFO,
+                DB_HANDLER,
                 LOG_INFO,
             ).handler
             return self._db_repo
@@ -121,14 +82,9 @@ class SMACrossBackTester:
         try:
             return self._price_data
         except AttributeError:
-            if self.period:
-                if self.period == TestPeriodController.max:
-                    self._price_data = self.db_repo.get_all(self.ticker)
-                else:
-                    self._price_data = self.db_repo.get_days_back(
-                        self.ticker, self.days_back
-                    )
-            elif self.start_date:
+            if self.start_date == "max":
+                self._price_data = self.db_repo.get_all(self.ticker)
+            else:
                 self._price_data = self.db_repo.get_since_date(
                     self.ticker, self.start_date
                 )
@@ -230,16 +186,17 @@ class SMACrossBackTester:
             log_info=LOG_INFO,
         ).handler
 
-        starting_cap = self.capital
+        starting_cap = self.starting_capital
         num_trades = 0
         if init_status == StockStatusController.buy:
             num_shares = self._get_num_shares(
-                self.capital, self.price_data[ColumnController.close.value].iloc[0]
+                self.starting_capital,
+                self.price_data[ColumnController.close.value].iloc[0],
             )
             init_message = f"{num_shares} shares"
         else:
             num_shares = 0
-            init_message = f"${self.capital}"
+            init_message = f"${self.starting_capital}"
 
         LOG.info(
             f"Beginning SMA Cross strategy with {init_message} for "
@@ -275,7 +232,7 @@ class SMACrossBackTester:
                 result = sma.run()
                 if result.signal == StockStatusController.buy:
                     num_shares = self._get_num_shares(
-                        self.capital, row[ColumnController.close.value]
+                        self.starting_capital, row[ColumnController.close.value]
                     )
                     num_trades += 1
                     LOG.debug(
@@ -283,19 +240,19 @@ class SMACrossBackTester:
                         + f"on {row[ColumnController.date.value]}."
                     )
                 elif result.signal == StockStatusController.sell:
-                    self.capital = self._get_new_capital(
+                    self.starting_capital = self._get_new_capital(
                         num_shares, row[ColumnController.close.value]
                     )
                     num_trades += 1
                     LOG.debug(
                         f"Sold {num_shares} shares at price "
                         + f"{row[ColumnController.close.value]} on "
-                        + f"{row[ColumnController.date.value]} for a new capital of {self.capital}."
+                        + f"{row[ColumnController.date.value]} for a new capital of {self.starting_capital}."
                     )
                     num_shares = 0
 
         if num_shares != 0:
-            self.capital = self._get_new_capital(
+            self.starting_capital = self._get_new_capital(
                 num_shares, self.price_data[ColumnController.close.value].iloc[-1]
             )
             LOG.debug(
@@ -303,15 +260,15 @@ class SMACrossBackTester:
                 + f"{self.price_data[ColumnController.close.value].iloc[-1]} "
                 + f"on {self.price_data[ColumnController.date.value].iloc[-1]}."
             )
-            LOG.debug(f"Selling all for a new capital of {self.capital}.")
-        percent_change = self._get_percent_change(starting_cap, self.capital)
+            LOG.debug(f"Selling all for a new capital of {self.starting_capital}.")
+        percent_change = self._get_percent_change(starting_cap, self.starting_capital)
 
         res = BackTestResult(
             ticker=self.ticker,
             start_date=dt_to_str(self.price_data[ColumnController.date.value].iloc[0]),
             end_date=dt_to_str(self.price_data[ColumnController.date.value].iloc[-1]),
             init_cap=starting_cap,
-            final_cap=self.capital,
+            final_cap=self.starting_capital,
             cap_gains=percent_change,
             num_trades=num_trades,
         )
@@ -321,18 +278,3 @@ class SMACrossBackTester:
         )
 
         return res
-
-
-if __name__ == "__main__":
-    from config import DB_INFO
-
-    ticker = "aapl"
-    tester = SMACrossBackTester(
-        ticker=ticker,
-        db_info=DB_INFO,
-        db_handler=DBHandlerController.postgres,
-        period=TestPeriodController.max,
-        # start_date="2005-01-01",
-        capital=1000,
-    )
-    result: BackTestResult = tester.test()

@@ -30,10 +30,9 @@ cd ./dags
 python orchestrate.py
 
 # Backtesting
-cd ../back_testing
-python sma_cross_backtest.py
+cd ../bin
+./test_backtester.sh
 
 # Testing the notification API by sending
 # a few curl commands
-cd ../bin
 ./test_notification.sh

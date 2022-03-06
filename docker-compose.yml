@@ -19,6 +19,17 @@ services:
     networks:
       - algo_trading_network
 
+  backtest:
+    build:
+      context: .
+      dockerfile: Dockerfile.backtest
+    env_file:
+      - ./back_testing/.env
+    ports:
+      - 8005:8005
+    networks:
+      - algo_trading_network
+
   postgres:
     image: postgres:10
     volumes:
