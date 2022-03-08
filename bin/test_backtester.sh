@@ -1,6 +1,6 @@
 #!/bin/bash
 
-echo "Backtesting AAPL from max date"
+echo "Backtesting AAPL from max date - should be 336 trades."
 curl -X 'POST' \
   'http://localhost:8005/backtest' \
   -H 'accept: application/json' \
@@ -14,7 +14,7 @@ curl -X 'POST' \
 }'
 echo
 
-echo "Backtesting AAPL from more recent date"
+echo "Backtesting AAPL from more recent date - should be 194 trades."
 curl -X 'POST' \
   'http://localhost:8005/backtest' \
   -H 'accept: application/json' \
