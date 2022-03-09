@@ -1,4 +1,4 @@
-version: '3.4'
+version: '3.7'
 
 volumes:
   postgres_data: null
@@ -8,12 +8,37 @@ networks:
   algo_trading_network: null
 
 services:
+  notification:
+    build:
+      context: .
+      dockerfile: Dockerfile.notification
+    env_file:
+      - ./email_service/.env
+    ports:
+      - 8000:8000
+    networks:
+      - algo_trading_network
+
+  backtest:
+    build:
+      context: .
+      dockerfile: Dockerfile.backtest
+    env_file:
+      - ./back_testing/.env
+    ports:
+      - 8005:8005
+    networks:
+      - algo_trading_network
+
   postgres:
     image: postgres:10
     volumes:
       - postgres_data:/var/lib/postgresql/data/pgdata
-    env_file:
-      - .env
+    environment:
+      - POSTGRES_USER=dev
+      - POSTGRES_PASSWORD=password
+      - POSTGRES_DB=price_db
+      - PGDATA=/var/lib/postgresql/data/pgdata
     ports:
       - 5432:5432
     networks:
@@ -24,8 +49,9 @@ services:
     restart: always
     depends_on:
       - postgres
-    env_file:
-      - .env
+    environment:
+      - PGADMIN_DEFAULT_EMAIL=admin@admin.com
+      - PGADMIN_DEFAULT_PASSWORD=password
     ports:
       - 80:80
     networks:
@@ -46,8 +72,9 @@ services:
     ports:
       - 9000:9000
       - 9001:9001
-    env_file:
-      - .env
+    environment:
+      - MINIO_ROOT_USER=admin
+      - MINIO_ROOT_PASSWORD=password
     command: server /object_storage --console-address ":9001"
     networks:
       - algo_trading_network

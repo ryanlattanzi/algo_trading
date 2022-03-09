@@ -169,7 +169,6 @@ class FakeDBRepository(AbstractDBRepository):
         """
         self.data = data
         self.log_info = log_info
-
         self.idx_iterator = 0
 
     def create_new_ticker_tables(self, tickers: List[str]) -> List:

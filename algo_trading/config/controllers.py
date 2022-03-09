@@ -20,11 +20,6 @@ class ColumnController(Enum):
     ema_26 = "ema_26"
 
 
-    # Key Value stuff
-    last_cross_up = "last_cross_up"
-    last_cross_down = "last_cross_down"
-    last_status = "last_status"
-
     @classmethod
     def df_columns(cls) -> List[str]:
         return [
@@ -72,30 +67,45 @@ class ColumnController(Enum):
             cls.macd.value: 
         }
 
-class StockStatusController(Enum):
+class StockStatusController(str, Enum):
     buy = "BUY"
     sell = "SELL"
     wait = "WAIT"
     hold = "HOLD"
 
 
-class DBHandlerController(Enum):
+class DBHandlerController(str, Enum):
     fake = "fake"
     postgres = "postgres"
 
 
-class DataHandlerController(Enum):
+class DataHandlerController(str, Enum):
     yahoo_finance = "yahoo_finance"
 
 
-class KeyValueController(Enum):
+class KeyValueController(str, Enum):
     fake = "fake"
     redis = "redis"
 
 
-class ObjStoreController(Enum):
+class ObjStoreController(str, Enum):
     minio = "minio"
     s3 = "s3"
+
+
+class PubSubController(str, Enum):
+    redis = "redis"
+
+
+class TestPeriodController(str, Enum):
+    one_mo = "1mo"
+    three_mo = "3mo"
+    six_mo = "6mo"
+    one_yr = "1yr"
+    two_yr = "2yr"
+    five_yr = "5yr"
+    ten_yr = "10yr"
+    max = "max"
 
 
 class Config(BaseModel):
@@ -105,3 +115,10 @@ class Config(BaseModel):
     data_repo: str
     kv_repo: str
     obj_store_repo: str
+
+
+class SMACrossInfo(BaseModel):
+
+    last_cross_up: str = "1900-01-01"
+    last_cross_down: str = "1900-01-02"
+    last_status: StockStatusController = StockStatusController.sell
