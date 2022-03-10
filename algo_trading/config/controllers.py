@@ -16,6 +16,9 @@ class ColumnController(Enum):
     ma_50 = "ma_50"
     ma_21 = "ma_21"
     ma_7 = "ma_7"
+    ema_9 = "ema_9"
+    ema_12 = "ema_12"
+    ema_26 = "ema_26"
 
     @classmethod
     def df_columns(cls) -> List[str]:
@@ -43,6 +46,9 @@ class ColumnController(Enum):
             cls.ma_50.value: "REAL",
             cls.ma_21.value: "REAL",
             cls.ma_7.value: "REAL",
+            cls.ema_9.value: "REAL",
+            cls.ema_12.value: "REAL",
+            cls.ema_26.value: "REAL",
         }
 
     @classmethod
@@ -52,6 +58,14 @@ class ColumnController(Enum):
             cls.ma_50.value: 50,
             cls.ma_21.value: 21,
             cls.ma_7.value: 7,
+        }
+
+    @classmethod
+    def macd_calculations(cls) -> Dict:
+        return {
+            cls.ema_9.value: 9,
+            cls.ema_12.value: 12,
+            cls.ema_26.value: 26,
         }
 
 

@@ -103,6 +103,7 @@ def get_new_ticker_data(
         stock_df = clean_df(stock_df)
         stock_df = stock_df.sort_values([ColumnController.date.value], ascending=True)
         stock_df = Calculator.calculate_sma(stock_df, ColumnController.close.value)
+        stock_df = Calculator.calculate_ema(stock_df, ColumnController.close.value)
 
         new_ticker_data[ticker] = stock_df
     return new_ticker_data
@@ -230,6 +231,7 @@ def get_existing_ticker_data(
         )
 
         full_df = Calculator.calculate_sma(full_df, ColumnController.close.value)
+        full_df = Calculator.calculate_ema(full_df, ColumnController.close.value)
 
         # Only getting the new rows to upload to the DB
         mask = full_df[ColumnController.date.value] >= stock_df_first_date
