@@ -53,15 +53,15 @@ class MACDCrossUtils:
         cross_info: MACDCrossInfo,
     ) -> MACDCrossInfo:
         """
-        _summary_
+        This function will check the macd current day and previous day to determine if a cross up event happened.
 
         Args:
-            data (pd.DataFrame): _description_
-            index (int): _description_
-            cross_info (MACDCrossInfo): _description_
+            data (pd.DataFrame): dataframe from postgres with all stock data.
+            index (int): index is the current day, index - 1 is the previous day.
+            cross_info (MACDCrossInfo): current cross info stored in Redis for the ticker.
 
         Returns:
-            MACDCrossInfo: _description_
+            MACDCrossInfo: Returns the date of when a cross up occured.
         """
 
         macd_cdv_curr, macd_cdv_prev = MACDCrossUtils._calc_macd_signal(data, index)
@@ -81,15 +81,15 @@ class MACDCrossUtils:
         cross_info: MACDCrossInfo,
     ) -> MACDCrossInfo:
         """
-        _summary_
+        This function will check the macd current day and previous day to determine if a cross down event happened.
 
         Args:
-            data (pd.DataFrame): _description_
-            index (int): _description_
-            cross_info (MACDCrossInfo): _description_
+            data (pd.DataFrame): dataframe from postgres with all stock data.
+            index (int): index is the current day, index -1 is the previous day.
+            cross_info (MACDCrossInfo): current cross info stored in Redis for the ticker.
 
         Returns:
-            MACDCrossInfo: _description_
+            MACDCrossInfo: Returns the updated cross info to Redis with the new cross down event.
         """
 
         macd_cdv_curr, macd_cdv_prev = MACDCrossUtils._calc_macd_signal(data, index)
@@ -144,35 +144,34 @@ class MACDCross(AbstractStrategy):
         current.last_status = signal
         self.cross_db.set(self.ticker, current.dict())
 
+    def run(self) -> TradeEvent:
+        """Runs the MACDCross strategy logic based on the last cross up/down
+        in the Key Value store.
 
-def run(self) -> TradeEvent:
-    """Runs the MACDCross strategy logic based on the last cross up/down
-    in the Key Value store.
+        Returns:
+            TradeEvent: Event
+        """
+        last_cross_up = str_to_dt(self.cross_info.last_cross_up)
+        last_cross_down = str_to_dt(self.cross_info.last_cross_down)
+        last_status = self.cross_info.last_status
 
-    Returns:
-        TradeEvent: Event
-    """
-    last_cross_up = str_to_dt(self.cross_info.last_cross_up)
-    last_cross_down = str_to_dt(self.cross_info.last_cross_down)
-    last_status = self.cross_info.last_status
+        date = self.macd_info[ColumnController.date.value]
 
-    date = self.macd_info[ColumnController.date.value]
+        if date:
+            if last_cross_up > last_cross_down:
+                if last_status == StockStatusController.buy:
+                    signal = StockStatusController.hold
+                elif last_status == StockStatusController.sell:
+                    signal = StockStatusController.buy
+                    self._update_last_status(signal)
+            else:
+                if last_status == StockStatusController.buy:
+                    signal = StockStatusController.sell
+                    self._update_last_status(signal)
+                elif last_status == StockStatusController.sell:
+                    signal = StockStatusController.wait
 
-    if date:
-        if last_cross_up > last_cross_down:
-            if last_status == StockStatusController.buy:
-                signal = StockStatusController.hold
-            elif last_status == StockStatusController.sell:
-                signal = StockStatusController.buy
-                self._update_last_status(signal)
         else:
-            if last_status == StockStatusController.buy:
-                signal = StockStatusController.sell
-                self._update_last_status(signal)
-            elif last_status == StockStatusController.sell:
-                signal = StockStatusController.wait
+            signal = StockStatusController.wait
 
-    else:
-        signal = StockStatusController.wait
-
-    return TradeEvent(date=date, ticker=self.ticker, signal=signal)
+        return TradeEvent(date=date, ticker=self.ticker, signal=signal)
