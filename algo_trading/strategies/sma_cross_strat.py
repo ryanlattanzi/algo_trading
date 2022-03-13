@@ -1,3 +1,4 @@
+from datetime import datetime
 from typing import Dict
 import json
 import pandas as pd
@@ -112,13 +113,13 @@ class SMACross(AbstractStrategy):
     def __init__(
         self,
         ticker: str,
-        sma_db: AbstractDBRepository,
         cross_db: AbstractKeyValueRepository,
+        date: datetime,
     ) -> None:
 
         self.ticker = ticker
-        self.sma_db = sma_db
         self.cross_db = cross_db
+        self.date = date
 
     @property
     def cross_info(self) -> SMACrossInfo:
@@ -129,15 +130,6 @@ class SMACross(AbstractStrategy):
                 **json.loads(self.cross_db.get(self.ticker))
             )
             return self._cross_info
-
-    @property
-    def sma_info(self) -> Dict:
-        data = self.sma_db.get_days_back(self.ticker, 1)
-        try:
-            data = data.to_dict("records")[0]
-        except IndexError:
-            data = {ColumnController.date.value: None}
-        return data
 
     def _update_last_status(self, signal: StockStatusController) -> None:
         """Updates the ast_status value to the given signal for the
@@ -161,23 +153,17 @@ class SMACross(AbstractStrategy):
         last_cross_down = str_to_dt(self.cross_info.last_cross_down)
         last_status = self.cross_info.last_status
 
-        date = self.sma_info[ColumnController.date.value]
-
-        if date:
-            if last_cross_up > last_cross_down:
-                if last_status == StockStatusController.buy:
-                    signal = StockStatusController.hold
-                elif last_status == StockStatusController.sell:
-                    signal = StockStatusController.buy
-                    self._update_last_status(signal)
-            else:
-                if last_status == StockStatusController.buy:
-                    signal = StockStatusController.sell
-                    self._update_last_status(signal)
-                elif last_status == StockStatusController.sell:
-                    signal = StockStatusController.wait
-
+        if last_cross_up > last_cross_down:
+            if last_status == StockStatusController.buy:
+                signal = StockStatusController.hold
+            elif last_status == StockStatusController.sell:
+                signal = StockStatusController.buy
+                self._update_last_status(signal)
         else:
-            signal = StockStatusController.wait
+            if last_status == StockStatusController.buy:
+                signal = StockStatusController.sell
+                self._update_last_status(signal)
+            elif last_status == StockStatusController.sell:
+                signal = StockStatusController.wait
 
-        return TradeEvent(date=date, ticker=self.ticker, signal=signal)
+        return TradeEvent(date=self.date, ticker=self.ticker, signal=signal)

@@ -15,6 +15,7 @@ endpoint to localhost:9000. If we are to Dockerize the app, we need to change it
 accordingly to the network location.
 """
 
+"""
 # Loading in and parsing config
 # NEED TO CHANGE THIS TO ENVIRONMENT VARIABLES INSTEAD
 config_path = os.path.join(
@@ -90,3 +91,4 @@ def test_bucket_integration():
 
 if __name__ == "__main__":
     test_bucket_integration()
+"""

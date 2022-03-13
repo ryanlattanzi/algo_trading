@@ -1,7 +1,7 @@
-from datetime import timedelta, datetime
+from datetime import timedelta
 import os
 import json
-from typing import Dict, Optional, Tuple
+from typing import Dict, Tuple
 import pandas as pd
 from pydantic import validate_arguments
 
@@ -14,7 +14,6 @@ from algo_trading.repositories.db_repository import AbstractDBRepository, DBRepo
 from algo_trading.repositories.key_val_repository import KeyValueRepository
 from algo_trading.config.controllers import (
     ColumnController,
-    DBHandlerController,
     KeyValueController,
     StockStatusController,
     SMACrossInfo,
@@ -50,7 +49,6 @@ class SMACrossBackTester:
         self.start_date = payload.start_date
         self.starting_capital = payload.starting_capital
 
-        self.fake_db_repo = None
         self.fake_kv_repo = None
 
     @property
@@ -173,11 +171,6 @@ class SMACrossBackTester:
 
         Calculates percent gain/loss after
         """
-        fake_db_repo = DBRepository(
-            self.price_data,
-            DBHandlerController.fake,
-            LOG_INFO,
-        ).handler
 
         init_status, init_kv = self._init_fake_key_value()
         fake_kv_repo = KeyValueRepository(
@@ -227,8 +220,8 @@ class SMACrossBackTester:
                 )
 
                 fake_kv_repo.set(self.ticker, cross_info.dict())
-
-                sma = SMACross(self.ticker, fake_db_repo, fake_kv_repo)
+                date = self.price_data.iloc[idx][ColumnController.date.value]
+                sma = SMACross(self.ticker, fake_kv_repo, date)
                 result = sma.run()
                 if result.signal == StockStatusController.buy:
                     num_shares = self._get_num_shares(

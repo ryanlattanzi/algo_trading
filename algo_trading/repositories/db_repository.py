@@ -155,7 +155,11 @@ class AbstractDBRepository(ABC):
 
 
 class FakeDBRepository(AbstractDBRepository):
-    def __init__(self, data: pd.DataFrame, log_info: LogConfig) -> None:
+    def __init__(
+        self,
+        db_info: Dict,
+        log_info: LogConfig,
+    ) -> None:
         """Fake DB repo that accepts data as a DF to act as
         the table in the live price DB. The DF is in ASCENDING
         order by date.
@@ -165,11 +169,14 @@ class FakeDBRepository(AbstractDBRepository):
         the DF to test strategies.
 
         Args:
-            data (pd.DataFrame): Data to 'query' from.
+            db_info (Dict): Init dict containing data and starting index.
+            log_info (LogConfig): log info
         """
-        self.data = data
+        self.db_info = db_info
         self.log_info = log_info
-        self.idx_iterator = 0
+
+        self.data = self.db_info.get("data")
+        self.idx_iterator = self.db_info.get("idx_iterator", 0)
 
     def create_new_ticker_tables(self, tickers: List[str]) -> List:
         pass
@@ -180,7 +187,7 @@ class FakeDBRepository(AbstractDBRepository):
         else:
             start_idx = self.idx_iterator - days_back
 
-        data = self.data.iloc[start_idx : (self.idx_iterator)]
+        data = self.data.iloc[start_idx : (self.idx_iterator + 1)]
         self.idx_iterator += 1
         return data
 
@@ -286,7 +293,7 @@ class DBRepository:
     # @validate_arguments(config=dict(arbitrary_types_allowed=True))
     def __init__(
         self,
-        db_info: Union[Dict, pd.DataFrame],
+        db_info: Dict,
         db_handler: DBHandlerController,
         log_info: LogConfig,
     ) -> None:
