@@ -8,8 +8,12 @@ kill:
 	./bin/kill_env.sh
 
 # Integration test.
-test:
+test-integration:
 	./bin/test_integration.sh
+
+# Pytest Unit Tests.
+test-unit:
+	./bin/test_unit.sh
 
 # Builds new algo_trading package
 .PHONY: dist

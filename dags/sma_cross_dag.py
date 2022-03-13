@@ -11,6 +11,7 @@ from algo_trading.repositories.db_repository import DBRepository
 from algo_trading.repositories.key_val_repository import KeyValueRepository
 from algo_trading.repositories.obj_store_repository import ObjStoreRepository
 from algo_trading.config.controllers import (
+    ColumnController,
     StockStatusController,
     ObjStoreController,
     DBHandlerController,
@@ -142,7 +143,10 @@ def run_sma(tickers: List) -> List[TradeEvent]:
     """
     events = []
     for ticker in tickers:
-        sma = SMACross(ticker, DB_HANDLER, KV_HANDLER)
+        date = DB_HANDLER.get_days_back(ticker, 1).to_dict("records")[0][
+            ColumnController.date.value
+        ]
+        sma = SMACross(ticker, KV_HANDLER, date)
         result = sma.run()
         if result.signal in [StockStatusController.buy, StockStatusController.sell]:
             events.append(result)
