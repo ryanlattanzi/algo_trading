@@ -21,7 +21,8 @@ class SMACrossUtils:
         index: int,
         cross_info: SMACrossInfo,
     ) -> SMACrossInfo:
-        """Checks to see if a cross up occured by looking at
+        """
+        Checks to see if a cross up occured by looking at
         the current date 7 and 21 day SMA and the previous date
         7 and 21 day SMA. Finally, we only consider cross up
         when the close price > 50 ay SMA otherwise the market
