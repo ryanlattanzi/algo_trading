@@ -22,7 +22,7 @@ jobs:
           pip install -r requirements.txt
       - name: Set PYTHONPATH
         run: |
-          echo "PYTHONPATH=algo_trading" >> $GITHUB_ENV
+          echo "::set-env name=PYTHONPATH::home/runner/work/algo_trading"
       - name: Run tests with pytest
         run: |
           make test-unit
