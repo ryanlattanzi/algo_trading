@@ -42,8 +42,7 @@ class TestCheckCrossUp:
             4,
             SMACrossInfo(),
         )
-        # assert cross_info.last_cross_up == "2005-01-07"
-        assert cross_info.last_cross_up == "2005-01-05"
+        assert cross_info.last_cross_up == "2005-01-07"
 
     def test_no_cross_up(self):
         """
