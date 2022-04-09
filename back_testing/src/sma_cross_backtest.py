@@ -183,7 +183,7 @@ class SMACrossBackTester:
         """
         return round(((end_cap - start_cap) / start_cap) * 100, precision)
 
-    def test(self) -> Tuple[BackTestResult, Dict[str, StockStatusController]]:
+    def test(self) -> Tuple[BackTestResult, Dict[str, str]]:
         """
         Runs the SMA strategy over the cached price data.
         Instantiates a fake DBRepository and a fake KeyValueRepository
