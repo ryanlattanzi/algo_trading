@@ -1,14 +1,12 @@
 from datetime import timedelta
 from logging import Logger
-import os
 import json
 from typing import Dict, Tuple
 import pandas as pd
 from pydantic import validate_arguments
 
 
-from algo_trading.logger.default_logger import get_main_logger
-from algo_trading.logger.controllers import LogConfig, LogLevelController
+from algo_trading.logger.controllers import LogConfig
 from algo_trading.utils.utils import dt_to_str
 from algo_trading.strategies.sma_cross_strat import SMACross, SMACrossUtils
 from algo_trading.repositories.db_repository import AbstractDBRepository, DBRepository
@@ -22,16 +20,8 @@ from algo_trading.config.controllers import (
 )
 
 from .controllers import BackTestPayload, BackTestResult
-from .config import DB_INFO, DB_HANDLER
 
 # TODO: PERSIST LOGS TO MINIO BUCKET
-
-
-LOG, LOG_INFO = get_main_logger(
-    log_name="SMA_backtest",
-    file_name=None,
-    log_level=LogLevelController.info,
-)
 
 
 class SMACrossBackTester:
@@ -39,10 +29,10 @@ class SMACrossBackTester:
     def __init__(
         self,
         payload: BackTestPayload,
-        db_info: Dict = DB_INFO,
-        db_handler: DBHandlerController = DB_HANDLER,
-        log: Logger = LOG,
-        log_info: LogConfig = LOG_INFO,
+        db_info: Dict,
+        db_handler: DBHandlerController,
+        log: Logger,
+        log_info: LogConfig,
     ) -> None:
         """
         SMACross Backtesting class. Entrypoint is the test() method.
@@ -200,7 +190,7 @@ class SMACrossBackTester:
         fake_kv_repo = KeyValueRepository(
             kv_info=init_kv,
             kv_handler=KeyValueController.fake,
-            log_info=LOG_INFO,
+            log_info=self.log_info,
         ).handler
 
         starting_cap = self.starting_capital
