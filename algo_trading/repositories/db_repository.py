@@ -175,7 +175,7 @@ class FakeDBRepository(AbstractDBRepository):
         self.db_info = db_info
         self.log_info = log_info
 
-        self.data = self.db_info.get("data")
+        self.data: pd.DataFrame = self.db_info["data"]
         self.idx_iterator = self.db_info.get("idx_iterator", 0)
 
     def create_new_ticker_tables(self, tickers: List[str]) -> List:

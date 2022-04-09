@@ -25,7 +25,7 @@ def backtest(payload: BackTestPayload) -> Dict:
     """
 
     tester = STRATEGIES[payload.strategy](payload=payload)
-    res: BackTestResult = tester.test()
+    res, _ = tester.test()
 
     return {
         "status": 200,
