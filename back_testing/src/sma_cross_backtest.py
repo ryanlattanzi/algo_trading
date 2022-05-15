@@ -18,6 +18,7 @@ from algo_trading.config.controllers import (
     StockStatusController,
     SMACrossInfo,
 )
+from algo_trading.utils.calculations import Calculator
 
 from .controllers import BackTestPayload, BackTestResult
 
@@ -92,6 +93,9 @@ class SMACrossBackTester:
                 self._price_data = self.db_repo.get_since_date(
                     self.ticker, self.start_date
                 )
+            self._price_data = Calculator.calculate_sma(
+                self._price_data, ColumnController.close.value
+            )
             return self._price_data
 
     def _init_fake_key_value(self) -> Tuple[StockStatusController, Dict[str, str]]:

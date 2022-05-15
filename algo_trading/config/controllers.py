@@ -42,13 +42,6 @@ class ColumnController(Enum):
             cls.close.value: "REAL",
             cls.adj_close.value: "REAL",
             cls.volume.value: "BIGINT",
-            cls.ma_200.value: "REAL",
-            cls.ma_50.value: "REAL",
-            cls.ma_21.value: "REAL",
-            cls.ma_7.value: "REAL",
-            cls.ema_9.value: "REAL",
-            cls.ema_12.value: "REAL",
-            cls.ema_26.value: "REAL",
         }
 
     @classmethod
