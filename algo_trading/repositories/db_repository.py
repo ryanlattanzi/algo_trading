@@ -9,7 +9,7 @@ from pydantic import validate_arguments
 from algo_trading.logger.controllers import LogConfig
 from algo_trading.logger.default_logger import get_child_logger
 from algo_trading.config.controllers import ColumnController, DBHandlerController
-from algo_trading.utils.utils import dt_to_str, str_to_dt
+from algo_trading.utils.utils import dt_to_str, str_to_dt, read_sql_to_df
 
 
 class AbstractQuery(ABC):
@@ -363,19 +363,19 @@ class PostgresRepository(AbstractDBRepository):
         query = self.queries.get_days_back.format(
             table=ticker, date_col=self.date_col, days_back=days_back
         )
-        return pd.read_sql(query, con=self.db_engine)
+        return read_sql_to_df(query, self.db_engine)
 
     def get_since_date(self, ticker: str, date: str) -> pd.DataFrame:
         query = self.queries.get_since_date.format(
             table=ticker, date_col=self.date_col, since_date=date
         )
-        return pd.read_sql(query, con=self.db_engine)
+        return read_sql_to_df(query, self.db_engine)
 
     def get_until_date(self, ticker: str, date: str) -> pd.DataFrame:
         query = self.queries.get_until_date.format(
             table=ticker, date_col=self.date_col, until_date=date
         )
-        return pd.read_sql(query, con=self.db_engine)
+        return read_sql_to_df(query, self.db_engine)
 
     def get_dates_between(
         self, ticker: str, start_date: str, end_date: str
@@ -386,15 +386,15 @@ class PostgresRepository(AbstractDBRepository):
             start_date=start_date,
             end_date=end_date,
         )
-        return pd.read_sql(query, con=self.db_engine)
+        return read_sql_to_df(query, self.db_engine)
 
     def get_row_num(self, ticker: str) -> pd.DataFrame:
         query = self.queries.get_row_num.format(table=ticker, date_col=self.date_col)
-        return pd.read_sql(query, con=self.db_engine)
+        return read_sql_to_df(query, self.db_engine)
 
     def get_all(self, ticker: str) -> pd.DataFrame:
-        query = self.queries.get_all.format(table_name=ticker, date_col=self.date_col)
-        return pd.read_sql(query, con=self.db_engine)
+        query = self.queries.get_all.format(table=ticker, date_col=self.date_col)
+        return read_sql_to_df(query, self.db_engine)
 
 
 class DBRepository:
