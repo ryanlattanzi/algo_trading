@@ -41,9 +41,19 @@ def backtest(payload: BackTestPayload) -> Dict:
     }
 
     tester = strategies[payload.strategy]
-    res, _ = tester.test()
-
-    return {
-        "status": 200,
-        "body": res,
-    }
+    try:
+        summary, trade_book = tester.test()
+        return {
+            "status": 200,
+            "body": {
+                "summary": summary,
+                # "trade_book": trade_book,
+            },
+            "error": None,
+        }
+    except Exception as e:
+        return {
+            "status": 500,
+            "body": None,
+            "error": str(e),
+        }
