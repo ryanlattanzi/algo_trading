@@ -19,6 +19,7 @@ from algo_trading.config.controllers import (
     SMACrossInfo,
 )
 from algo_trading.utils.calculations import Calculator
+from algo_trading.exceptions.data_exceptions import DateNotFoundException
 
 from .controllers import BackTestPayload, BackTestResult
 
@@ -100,9 +101,17 @@ class SMACrossBackTester:
                 # for the given start date
 
                 row_nums = self.db_repo.get_row_num(self.ticker)
-                start_date_idx = row_nums.index[
-                    row_nums[ColumnController.date.value] == str_to_dt(self.start_date)
-                ].tolist()[0]
+                try:
+                    start_date_idx = row_nums.index[
+                        row_nums[ColumnController.date.value]
+                        == str_to_dt(self.start_date)
+                    ].tolist()[0]
+                except IndexError:
+                    self.log.error(
+                        f"Failed to backtest {self.ticker} with start date {self.start_date}"
+                    )
+                    raise DateNotFoundException(self.start_date, self.ticker)
+
                 pull_date_idx = max(0, int(start_date_idx) - 199)
                 pull_date = row_nums.iloc[pull_date_idx].to_dict()[
                     ColumnController.date.value
@@ -115,7 +124,7 @@ class SMACrossBackTester:
                 )
                 self._price_data = self._price_data.iloc[
                     (start_date_idx - pull_date_idx) :
-                ]
+                ].reset_index(drop=True)
             return self._price_data
 
     def _init_fake_key_value(self) -> Tuple[StockStatusController, Dict[str, str]]:
