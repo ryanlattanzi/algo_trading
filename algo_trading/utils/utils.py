@@ -1,6 +1,7 @@
 from typing import List
 from datetime import datetime
 import pandas as pd
+from sqlalchemy.engine.base import Engine
 
 from algo_trading.config.controllers import ColumnController
 
@@ -39,3 +40,15 @@ def str_to_dt(date_str: str, fmt: str = DATE_FORMAT) -> datetime:
 
 def dt_to_str(dt: datetime, fmt: str = DATE_FORMAT) -> str:
     return dt.strftime(fmt)
+
+
+def convert_date_col_to_datetime(df: pd.DataFrame, date_col: str) -> pd.DataFrame:
+    df[date_col] = pd.to_datetime(df[date_col])
+    return df
+
+
+def read_sql_to_df(query: str, con: Engine) -> pd.DataFrame:
+    df = pd.read_sql(query, con=con)
+    if ColumnController.date.value in df.columns:
+        df = convert_date_col_to_datetime(df, ColumnController.date.value)
+    return df

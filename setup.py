@@ -12,6 +12,7 @@ setuptools.setup(
     packages=[
         "algo_trading",
         "algo_trading.config",
+        "algo_trading.exceptions",
         "algo_trading.logger",
         "algo_trading.repositories",
         "algo_trading.strategies",

@@ -6,7 +6,6 @@ import pandas as pd
 
 from algo_trading.logger.default_logger import get_main_logger
 from algo_trading.logger.controllers import LogLevelController
-from algo_trading.utils.calculations import Calculator
 from algo_trading.repositories.data_repository import DataRepository
 from algo_trading.repositories.db_repository import DBRepository
 from algo_trading.repositories.obj_store_repository import ObjStoreRepository
@@ -102,8 +101,6 @@ def get_new_ticker_data(
         ).handler.get_stock_data()
         stock_df = clean_df(stock_df)
         stock_df = stock_df.sort_values([ColumnController.date.value], ascending=True)
-        stock_df = Calculator.calculate_sma(stock_df, ColumnController.close.value)
-        stock_df = Calculator.calculate_ema(stock_df, ColumnController.close.value)
 
         new_ticker_data[ticker] = stock_df
     return new_ticker_data
@@ -229,9 +226,6 @@ def get_existing_ticker_data(
         full_df[ColumnController.date.value] = pd.to_datetime(
             full_df[ColumnController.date.value]
         )
-
-        full_df = Calculator.calculate_sma(full_df, ColumnController.close.value)
-        full_df = Calculator.calculate_ema(full_df, ColumnController.close.value)
 
         # Only getting the new rows to upload to the DB
         mask = full_df[ColumnController.date.value] >= stock_df_first_date

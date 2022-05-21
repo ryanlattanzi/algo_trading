@@ -7,7 +7,7 @@ from pydantic import validate_arguments
 
 
 from algo_trading.logger.controllers import LogConfig
-from algo_trading.utils.utils import dt_to_str
+from algo_trading.utils.utils import dt_to_str, str_to_dt
 from algo_trading.strategies.sma_cross_strat import SMACross, SMACrossUtils
 from algo_trading.repositories.db_repository import AbstractDBRepository, DBRepository
 from algo_trading.repositories.key_val_repository import KeyValueRepository
@@ -18,6 +18,8 @@ from algo_trading.config.controllers import (
     StockStatusController,
     SMACrossInfo,
 )
+from algo_trading.utils.calculations import Calculator
+from algo_trading.exceptions.data_exceptions import DateNotFoundException
 
 from .controllers import BackTestPayload, BackTestResult
 
@@ -46,6 +48,7 @@ class SMACrossBackTester:
         """
         self.ticker = payload.ticker
         self.start_date = payload.start_date
+        self.end_date = payload.end_date
         self.starting_capital = payload.starting_capital
 
         self.db_info = db_info
@@ -87,11 +90,41 @@ class SMACrossBackTester:
             return self._price_data
         except AttributeError:
             if self.start_date == "max":
-                self._price_data = self.db_repo.get_all(self.ticker)
-            else:
-                self._price_data = self.db_repo.get_since_date(
-                    self.ticker, self.start_date
+                self._price_data = self.db_repo.get_until_date(
+                    self.ticker, self.end_date
                 )
+                self._price_data = Calculator.calculate_sma(
+                    self._price_data, ColumnController.close.value
+                )
+            else:
+                # Getting 199 days back in order to calculate SMA values
+                # for the given start date
+
+                row_nums = self.db_repo.get_row_num(self.ticker)
+                try:
+                    start_date_idx = row_nums.index[
+                        row_nums[ColumnController.date.value]
+                        == str_to_dt(self.start_date)
+                    ].tolist()[0]
+                except IndexError:
+                    self.log.error(
+                        f"Failed to backtest {self.ticker} with start date {self.start_date}"
+                    )
+                    raise DateNotFoundException(self.start_date, self.ticker)
+
+                pull_date_idx = max(0, int(start_date_idx) - 199)
+                pull_date = row_nums.iloc[pull_date_idx].to_dict()[
+                    ColumnController.date.value
+                ]
+                self._price_data = self.db_repo.get_dates_between(
+                    self.ticker, dt_to_str(pull_date), self.end_date
+                )
+                self._price_data = Calculator.calculate_sma(
+                    self._price_data, ColumnController.close.value
+                )
+                self._price_data = self._price_data.iloc[
+                    (start_date_idx - pull_date_idx) :
+                ].reset_index(drop=True)
             return self._price_data
 
     def _init_fake_key_value(self) -> Tuple[StockStatusController, Dict[str, str]]:

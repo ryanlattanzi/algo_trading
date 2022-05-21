@@ -10,7 +10,8 @@ from algo_trading.config.controllers import (
 )
 from algo_trading.logger.default_logger import get_main_logger
 from algo_trading.logger.controllers import LogLevelController
-from algo_trading.utils.utils import str_to_dt
+from algo_trading.utils.calculations import Calculator
+from algo_trading.utils.utils import dt_to_str, str_to_dt
 
 from back_testing.src.controllers import (
     BackTestOptions,
@@ -28,17 +29,20 @@ Functions tested in this module:
 - SMACrossBackTester.test()
 """
 
-DATA = pd.read_csv("./sample_data/backtest_sample_data.csv")
-DATA[ColumnController.date.value] = pd.to_datetime(
-    DATA[ColumnController.date.value],
+RAW_DATA = pd.read_csv("./sample_data/backtest_sample_data.csv")
+RAW_DATA[ColumnController.date.value] = pd.to_datetime(
+    RAW_DATA[ColumnController.date.value],
+)
+SMA_DATA = Calculator.calculate_sma(
+    RAW_DATA.copy(deep=True), ColumnController.close.value
 )
 
-DB_INFO = {"data": DATA}
+DB_INFO = {"data": RAW_DATA}
 DB_HANDLER = DBHandlerController.fake
 LOG, LOG_INFO = get_main_logger(
     log_name="test_SMA_backtest",
     file_name=None,
-    log_level=LogLevelController.debug,
+    log_level=LogLevelController.info,
 )
 
 
@@ -52,6 +56,7 @@ class TestSMACrossBackTester:
         ticker=ticker,
         strategy=BackTestOptions.sma_cross,
     )
+
     tester = SMACrossBackTester(
         payload=payload,
         db_info=DB_INFO,
@@ -60,25 +65,104 @@ class TestSMACrossBackTester:
         log_info=LOG_INFO,
     )
 
-    def test_check_price_data(self):
+    def test_check_raw_price_data(self):
         """
-        Double check price data is what we
+        Double check raw price data is what we
         expect.
         """
-        assert self.tester.price_data.equals(DATA)
+        assert self.tester.price_data.equals(SMA_DATA)
+
+    def test_check_start_date_less_than_200_idx(self):
+        """
+        Check if we supply an arbitrary start date which
+        corresponds to an index less than 200 in the test
+        data.
+        """
+        payload = BackTestPayload(
+            ticker=self.ticker,
+            strategy=BackTestOptions.sma_cross,
+            start_date="2004-01-29",
+            end_date="2004-11-11",
+        )
+        tester = SMACrossBackTester(
+            payload=payload,
+            db_info=DB_INFO,
+            db_handler=DB_HANDLER,
+            log=LOG,
+            log_info=LOG_INFO,
+        )
+
+        assert len(tester.price_data) == 200
+        assert (
+            dt_to_str(tester.price_data[ColumnController.date.value].iloc[0])
+            == "2004-01-29"
+        )
+        assert (
+            dt_to_str(tester.price_data[ColumnController.date.value].iloc[-1])
+            == "2004-11-11"
+        )
+        assert np.isnan(tester.price_data[ColumnController.ma_50.value].iloc[0])
+        assert tester.price_data[ColumnController.ma_200.value].iloc[-1] == 0.571891075
+
+    def test_check_start_date_greater_than_200_idx(self):
+        """
+        Check if we supply an arbitrary start date which
+        corresponds to an index greater than 200 in the test
+        data.
+        """
+
+        payload = BackTestPayload(
+            ticker=self.ticker,
+            strategy=BackTestOptions.sma_cross,
+            start_date="2004-12-28",
+            end_date="2005-03-09",
+        )
+        tester = SMACrossBackTester(
+            payload=payload,
+            db_info=DB_INFO,
+            db_handler=DB_HANDLER,
+            log=LOG,
+            log_info=LOG_INFO,
+        )
+
+        assert len(tester.price_data) == 50
+        assert tester.price_data.isnull().values.any() == False
+        assert (
+            dt_to_str(tester.price_data[ColumnController.date.value].iloc[0])
+            == "2004-12-28"
+        )
+        assert (
+            dt_to_str(tester.price_data[ColumnController.date.value].iloc[-1])
+            == "2005-03-09"
+        )
 
     def test_init_fake_key_value_init_sell(self):
         """
         Ensures we initialize the fake key value
         data structure appropriately with a sell signal.
         """
-        last_status, cross_info = self.tester._init_fake_key_value()
+
+        payload = BackTestPayload(
+            ticker=self.ticker,
+            strategy=BackTestOptions.sma_cross,
+            start_date="2010-11-19",
+            end_date="2010-12-31",
+        )
+
+        init_sell_tester = SMACrossBackTester(
+            payload=payload,
+            db_info=DB_INFO,
+            db_handler=DB_HANDLER,
+            log=LOG,
+            log_info=LOG_INFO,
+        )
+        last_status, cross_info = init_sell_tester._init_fake_key_value()
         assert last_status == StockStatusController.sell
         assert cross_info == {
             self.ticker: json.dumps(
                 SMACrossInfo(
-                    last_cross_up="2005-01-01",
-                    last_cross_down="2005-01-02",
+                    last_cross_up="2010-11-17",
+                    last_cross_down="2010-11-18",
                     last_status=StockStatusController.sell,
                 ).dict()
             )
@@ -88,23 +172,30 @@ class TestSMACrossBackTester:
         """
         Ensures we initialize the fake key value
         data structure appropriately with a buy signal.
-        Had to create a new instance of the SMACrossBackTester
-        with a data slice that gave use this result.
         """
+
+        payload = BackTestPayload(
+            ticker=self.ticker,
+            strategy=BackTestOptions.sma_cross,
+            start_date="2010-10-18",
+            end_date="2010-11-18",
+        )
+
         init_buy_tester = SMACrossBackTester(
-            payload=self.payload,
-            db_info={"data": DATA[4:10]},
+            payload=payload,
+            db_info=DB_INFO,
             db_handler=DB_HANDLER,
             log=LOG,
             log_info=LOG_INFO,
         )
+
         last_status, cross_info = init_buy_tester._init_fake_key_value()
         assert last_status == StockStatusController.buy
         assert cross_info == {
             self.ticker: json.dumps(
                 SMACrossInfo(
-                    last_cross_up="2005-01-06",
-                    last_cross_down="2005-01-05",
+                    last_cross_up="2010-10-17",
+                    last_cross_down="2010-10-16",
                     last_status=StockStatusController.buy,
                 ).dict()
             )
@@ -117,37 +208,14 @@ class TestSMACrossBackTester:
         want to initialize it with a sell signal since we
         are waiting for that first buy.
         """
-        init_row = pd.DataFrame(
-            [
-                {
-                    "date": str_to_dt("2005-01-02"),
-                    "open": "",
-                    "high": "",
-                    "low": "",
-                    "close": "",
-                    "adj_close": "",
-                    "volume": "",
-                    "ma_200": np.nan,
-                    "ma_50": np.nan,
-                    "ma_21": np.nan,
-                    "ma_7": np.nan,
-                }
-            ]
-        )
-        init_buy_tester = SMACrossBackTester(
-            payload=self.payload,
-            db_info={"data": pd.concat([init_row, DATA]).reset_index(drop=True)},
-            db_handler=DB_HANDLER,
-            log=LOG,
-            log_info=LOG_INFO,
-        )
-        last_status, cross_info = init_buy_tester._init_fake_key_value()
+
+        last_status, cross_info = self.tester._init_fake_key_value()
         assert last_status == StockStatusController.sell
         assert cross_info == {
             self.ticker: json.dumps(
                 SMACrossInfo(
-                    last_cross_up="2004-12-31",
-                    last_cross_down="2005-01-01",
+                    last_cross_up="2003-12-31",
+                    last_cross_down="2004-01-01",
                     last_status=StockStatusController.sell,
                 ).dict()
             )
@@ -158,19 +226,26 @@ class TestSMACrossBackTester:
         Testing the run function.
         """
         test_result, trade_book = self.tester.test()
+
         assert test_result == BackTestResult(
             **{
                 "ticker": "AAPL",
-                "start_date": "2005-01-03",
+                "start_date": "2004-01-02",
                 "end_date": "2010-12-31",
                 "init_cap": 1000.0,
-                "final_cap": 3380.4113608601306,
-                "cap_gains": 238.04,
-                "num_trades": 59,
+                "final_cap": 7003.8641066442315,
+                "cap_gains": 600.39,
+                "num_trades": 65,
             }
         )
 
         assert trade_book == {
+            "2004-05-18": "BUY",
+            "2004-07-07": "SELL",
+            "2004-07-22": "BUY",
+            "2004-08-09": "SELL",
+            "2004-08-25": "BUY",
+            "2004-12-22": "SELL",
             "2005-01-07": "BUY",
             "2005-03-09": "SELL",
             "2005-03-24": "BUY",

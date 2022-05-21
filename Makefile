@@ -8,7 +8,7 @@ kill:
 	./bin/kill_env.sh
 
 # Integration test.
-test-integration:
+test-integration: dist
 	./bin/test_integration.sh
 
 # Pytest Unit Tests.

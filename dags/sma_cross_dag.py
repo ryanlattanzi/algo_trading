@@ -19,6 +19,7 @@ from algo_trading.config.controllers import (
     SMACrossInfo,
 )
 from algo_trading.config.events import TradeEvent
+from algo_trading.utils.calculations import Calculator
 from algo_trading.utils.utils import str_to_dt, dt_to_str
 
 from config import (
@@ -66,6 +67,7 @@ def backfill_redis(new_tickers: List[str]) -> None:
 
     for ticker in new_tickers:
         data = DB_HANDLER.get_all(ticker)
+        data = Calculator.calculate_sma(data, ColumnController.close.value)
 
         if KV_HANDLER.get(ticker) is not None:
             LOG.info(f"Redis data for {ticker} already exists bum!")
@@ -114,7 +116,9 @@ def update_redis(tickers: List, new_tickers: List) -> None:
     """
 
     for ticker in [t for t in tickers if t not in new_tickers]:
-        data = DB_HANDLER.get_days_back(ticker, 2)
+        data = DB_HANDLER.get_days_back(ticker, 201)
+        data = Calculator.calculate_sma(data, ColumnController.close.value)
+
         cross_info = KV_HANDLER.get(ticker)
 
         if cross_info is None:

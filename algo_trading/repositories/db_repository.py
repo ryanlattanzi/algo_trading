@@ -9,7 +9,7 @@ from pydantic import validate_arguments
 from algo_trading.logger.controllers import LogConfig
 from algo_trading.logger.default_logger import get_child_logger
 from algo_trading.config.controllers import ColumnController, DBHandlerController
-from algo_trading.utils.utils import dt_to_str
+from algo_trading.utils.utils import dt_to_str, str_to_dt, read_sql_to_df
 
 
 class AbstractQuery(ABC):
@@ -63,27 +63,39 @@ class PostgresQuery(AbstractQuery):
 
     @property
     def get_most_recent_date(self) -> str:
-        return "SELECT DATE FROM %s ORDER BY DATE DESC LIMIT 1;"
+        return "SELECT {date_col} FROM {table} ORDER BY {date_col} DESC LIMIT 1;"
 
     @property
     def get_days_back(self) -> str:
         return """
             SELECT temp.*
-            FROM (SELECT * FROM %s ORDER BY DATE DESC LIMIT %s) AS temp
-            ORDER BY DATE ASC;
+            FROM (SELECT * FROM {table} ORDER BY {date_col} DESC LIMIT {days_back}) AS temp
+            ORDER BY {date_col} ASC;
             """
 
     @property
     def get_since_date(self) -> str:
-        return "SELECT * FROM %s WHERE DATE >= '%s' ORDER BY DATE ASC;"
+        return "SELECT * FROM {table} WHERE {date_col} >= '{since_date}' ORDER BY {date_col} ASC;"
+
+    @property
+    def get_until_date(self) -> str:
+        return "SELECT * FROM {table} WHERE {date_col} <= '{until_date}' ORDER BY {date_col} ASC;"
+
+    @property
+    def get_dates_between(self) -> str:
+        return "SELECT * FROM {table} WHERE {date_col} BETWEEN '{start_date}' AND '{end_date}' ORDER BY {date_col} ASC;"
 
     @property
     def get_all(self) -> str:
-        return "SELECT * FROM %s ORDER BY DATE ASC;"
+        return "SELECT * FROM {table} ORDER BY {date_col} ASC;"
+
+    @property
+    def get_row_num(self) -> str:
+        return "SELECT ROW_NUMBER() OVER() AS ROW_NUM, {date_col} FROM {table} ORDER BY {date_col} ASC;"
 
     @property
     def create_table(self) -> str:
-        return "CREATE TABLE IF NOT EXISTS %s (%s);"
+        return "CREATE TABLE IF NOT EXISTS {table} ({ddl_str});"
 
     @property
     def get_current_tickers(self) -> str:
@@ -141,6 +153,51 @@ class AbstractDBRepository(ABC):
         pass
 
     @abstractmethod
+    def get_until_date(self, ticker: str, date: str) -> pd.DataFrame:
+        """Gets data until the given date for the ticker (inclusive).
+        Returns price data in ASCENDING order by date.
+
+        Args:
+            ticker (str): Ticker to fetch data
+            date (str): Upper bound date from which to grab data.
+
+        Returns:
+            pd.DataFrame: Price data in ASCENDING order by date.
+        """
+        pass
+
+    @abstractmethod
+    def get_dates_between(
+        self, ticker: str, start_date: str, end_date: str
+    ) -> pd.DataFrame:
+        """Gets data between the two given dates (inclusive). Returns
+        data in ASCENDING order by date.
+
+        Args:
+            ticker (str): Ticker to fetch data.
+            start_date (str): Start date of price data.
+            end_date (str): End date of price data.
+
+        Returns:
+            pd.DataFrame: Price data in ASCENDING order by date.
+        """
+        pass
+
+    @abstractmethod
+    def get_row_num(self, ticker: str) -> pd.DataFrame:
+        """Gets the row number for each date in the table. Returns
+        a dataframe with ROW_NUM and DATE columns.
+
+        Args:
+            ticker (str): Ticker to fetch data.
+
+        Returns:
+            pd.DataFrame: Dataframe with all dates and corresponding
+                          row numbers.
+        """
+        pass
+
+    @abstractmethod
     def get_all(self, ticker: str) -> pd.DataFrame:
         """Gets all data for the ticker. Returns price data in
         ASCENDING order by date.
@@ -178,6 +235,17 @@ class FakeDBRepository(AbstractDBRepository):
         self.data: pd.DataFrame = self.db_info["data"]
         self.idx_iterator = self.db_info.get("idx_iterator", 0)
 
+    def _get_idx_from_date(self, date: str, default="max") -> int:
+        try:
+            return self.data.index[
+                self.data[ColumnController.date.value] == str_to_dt(date)
+            ].tolist()[0]
+        except IndexError:
+            if default == "max":
+                return len(self.data) - 1
+            else:
+                return int(0)
+
     def create_new_ticker_tables(self, tickers: List[str]) -> List:
         pass
 
@@ -192,13 +260,34 @@ class FakeDBRepository(AbstractDBRepository):
         return data
 
     def get_since_date(self, ticker: str, date: str) -> pd.DataFrame:
-        pass
+        since_date_idx = self._get_idx_from_date(date, default="min")
+        return self.data.iloc[since_date_idx:].reset_index(drop=True)
+
+    def get_until_date(self, ticker: str, date: str) -> pd.DataFrame:
+        until_date_idx = self._get_idx_from_date(date)
+        return self.data.iloc[: (until_date_idx + 1)].reset_index(drop=True)
+
+    def get_dates_between(
+        self, ticker: str, start_date: str, end_date: str
+    ) -> pd.DataFrame:
+        start_date_idx = self._get_idx_from_date(start_date, default="min")
+        end_date_idx = self._get_idx_from_date(end_date)
+        return self.data.iloc[start_date_idx : (end_date_idx + 1)].reset_index(
+            drop=True
+        )
+
+    def get_row_num(self, ticker: str) -> pd.DataFrame:
+        idx_df = self.data.reset_index()
+        return idx_df[["index", ColumnController.date.value]]
 
     def get_all(self, ticker: str) -> pd.DataFrame:
         return self.data
 
 
 class PostgresRepository(AbstractDBRepository):
+
+    date_col = ColumnController.date.value
+
     def __init__(self, db_info: Dict, log_info: LogConfig) -> None:
         """DB Repository that taps into a Postgres instance.
         There are a few added methods to the raw AbstractDBRepository
@@ -241,7 +330,7 @@ class PostgresRepository(AbstractDBRepository):
         col_str = ", ".join(
             [f"{k} {v}" for k, v in ColumnController.db_columns().items()]
         )
-        query = self.queries.create_table % (ticker, col_str)
+        query = self.queries.create_table.format(table=ticker, ddl_str=col_str)
         with self.db_engine.connect() as conn:
             conn.execute(query)
 
@@ -263,22 +352,49 @@ class PostgresRepository(AbstractDBRepository):
         df.to_sql(ticker, con=self.db_engine, if_exists="append", index=False)
 
     def get_most_recent_date(self, ticker: str) -> str:
-        query = self.queries.get_most_recent_date % (ticker,)
+        query = self.queries.get_most_recent_date.format(
+            date_col=self.date_col, table=ticker
+        )
         with self.db_engine.connect() as conn:
             res = conn.execute(query)
         return dt_to_str(res.fetchall()[0][0])
 
     def get_days_back(self, ticker: str, days_back: int) -> pd.DataFrame:
-        query = self.queries.get_days_back % (ticker, days_back)
-        return pd.read_sql(query, con=self.db_engine)
+        query = self.queries.get_days_back.format(
+            table=ticker, date_col=self.date_col, days_back=days_back
+        )
+        return read_sql_to_df(query, self.db_engine)
 
     def get_since_date(self, ticker: str, date: str) -> pd.DataFrame:
-        query = self.queries.get_since_date % (ticker, date)
-        return pd.read_sql(query, con=self.db_engine)
+        query = self.queries.get_since_date.format(
+            table=ticker, date_col=self.date_col, since_date=date
+        )
+        return read_sql_to_df(query, self.db_engine)
+
+    def get_until_date(self, ticker: str, date: str) -> pd.DataFrame:
+        query = self.queries.get_until_date.format(
+            table=ticker, date_col=self.date_col, until_date=date
+        )
+        return read_sql_to_df(query, self.db_engine)
+
+    def get_dates_between(
+        self, ticker: str, start_date: str, end_date: str
+    ) -> pd.DataFrame:
+        query = self.queries.get_dates_between.format(
+            table=ticker,
+            date_col=self.date_col,
+            start_date=start_date,
+            end_date=end_date,
+        )
+        return read_sql_to_df(query, self.db_engine)
+
+    def get_row_num(self, ticker: str) -> pd.DataFrame:
+        query = self.queries.get_row_num.format(table=ticker, date_col=self.date_col)
+        return read_sql_to_df(query, self.db_engine)
 
     def get_all(self, ticker: str) -> pd.DataFrame:
-        query = self.queries.get_all % (ticker,)
-        return pd.read_sql(query, con=self.db_engine)
+        query = self.queries.get_all.format(table=ticker, date_col=self.date_col)
+        return read_sql_to_df(query, self.db_engine)
 
 
 class DBRepository:
