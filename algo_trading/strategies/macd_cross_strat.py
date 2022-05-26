@@ -1,3 +1,4 @@
+from datetime import datetime
 from typing import Dict
 import json
 import pandas as pd
@@ -32,17 +33,21 @@ class MACDCrossUtils:
         """
         # Calculates the MACD signal value of the current day and previous day
         macd_signal_curr = (
-            data[ColumnController.ema_26].iloc[index]
-            - data[ColumnController.ema_12].iloc[index]
+            data[ColumnController.ema_26.value].iloc[index]
+            - data[ColumnController.ema_12.value].iloc[index]
         )
         macd_signal_prev = (
-            data[ColumnController.ema_26].iloc[index - 1]
-            - data[ColumnController.ema_12].iloc[index - 1]
+            data[ColumnController.ema_26.value].iloc[index - 1]
+            - data[ColumnController.ema_12.value].iloc[index - 1]
         )
 
         # Calculates the convergence/divergence value for the current and previous day
-        macd_cdv_curr = macd_signal_curr - data[ColumnController.ema_9].iloc[index]
-        macd_cdv_prev = macd_signal_prev - data[ColumnController.ema_9].iloc[index - 1]
+        macd_cdv_curr = (
+            macd_signal_curr - data[ColumnController.ema_9.value].iloc[index]
+        )
+        macd_cdv_prev = (
+            macd_signal_prev - data[ColumnController.ema_9.value].iloc[index - 1]
+        )
 
         return macd_cdv_curr, macd_cdv_prev
 
@@ -107,12 +112,12 @@ class MACDCross(AbstractStrategy):
     def __init__(
         self,
         ticker: str,
-        macd_db: AbstractDBRepository,
-        cross_db: AbstractKeyValueRepository,
+        macd_db: AbstractKeyValueRepository,
+        date: datetime,
     ) -> None:
         self.ticker = ticker
         self.macd_db = macd_db
-        self.cross_db = cross_db
+        self.date = date
 
     @property
     def cross_info(self) -> MACDCrossInfo:
@@ -120,7 +125,7 @@ class MACDCross(AbstractStrategy):
             return self._cross_info
         except AttributeError:
             self._cross_info = MACDCrossInfo(
-                **json.loads(self.cross_db.get(self.ticker))
+                **json.loads(self.macd_db.get(self.ticker))
             )
             return self._cross_info
 
@@ -142,7 +147,7 @@ class MACDCross(AbstractStrategy):
         """
         current = self.cross_info
         current.last_status = signal
-        self.cross_db.set(self.ticker, current.dict())
+        self.macd_db.set(self.ticker, current.dict())
 
     def run(self) -> TradeEvent:
         """Runs the MACDCross strategy logic based on the last cross up/down
@@ -155,23 +160,19 @@ class MACDCross(AbstractStrategy):
         last_cross_down = str_to_dt(self.cross_info.last_cross_down)
         last_status = self.cross_info.last_status
 
-        date = self.macd_info[ColumnController.date.value]
+        # Added this to trouble shoot the macd_info function
 
-        if date:
-            if last_cross_up > last_cross_down:
-                if last_status == StockStatusController.buy:
-                    signal = StockStatusController.hold
-                elif last_status == StockStatusController.sell:
-                    signal = StockStatusController.buy
-                    self._update_last_status(signal)
-            else:
-                if last_status == StockStatusController.buy:
-                    signal = StockStatusController.sell
-                    self._update_last_status(signal)
-                elif last_status == StockStatusController.sell:
-                    signal = StockStatusController.wait
-
+        if last_cross_up > last_cross_down:
+            if last_status == StockStatusController.buy:
+                signal = StockStatusController.hold
+            elif last_status == StockStatusController.sell:
+                signal = StockStatusController.buy
+                self._update_last_status(signal)
         else:
-            signal = StockStatusController.wait
+            if last_status == StockStatusController.buy:
+                signal = StockStatusController.sell
+                self._update_last_status(signal)
+            elif last_status == StockStatusController.sell:
+                signal = StockStatusController.wait
 
-        return TradeEvent(date=date, ticker=self.ticker, signal=signal)
+        return TradeEvent(date=self.date, ticker=self.ticker, signal=signal)
