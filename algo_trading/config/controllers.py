@@ -124,3 +124,14 @@ class MACDCrossInfo(BaseModel):
     last_cross_up: str = "1900-01-01"
     last_cross_down: str = "1900-01-02"
     last_status: StockStatusController = StockStatusController.sell
+
+
+class StrategyInfo(BaseModel):
+
+    sma_last_cross_up: str = "1900-01-01"
+    sma_last_cross_down: str = "1900-01-02"
+    sma_last_status: StockStatusController = StockStatusController.sell
+
+    macd_last_cross_up: str = "1900-01-01"
+    macd_last_cross_down: str = "1900-01-02"
+    macd_last_status: StockStatusController = StockStatusController.sell

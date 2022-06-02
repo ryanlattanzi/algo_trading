@@ -16,7 +16,7 @@ from algo_trading.config.controllers import (
     ObjStoreController,
     DBHandlerController,
     KeyValueController,
-    SMACrossInfo,
+    StrategyInfo,
 )
 from algo_trading.config.events import TradeEvent
 from algo_trading.utils.calculations import Calculator
@@ -75,26 +75,28 @@ def backfill_redis(new_tickers: List[str]) -> None:
 
         LOG.info(f"Backfilling cross up/down info for {ticker}")
 
-        init_cross_info = SMACrossInfo()
+        init_cross_info = StrategyInfo()
         cross_info = copy.deepcopy(init_cross_info)
 
         # TODO: Dirty way of finding out last cross up and cross down - can def do better
         for i in range(len(data.index) - 1, 1, -1):
             cross_info = SMACrossUtils.check_cross_up(data, i, cross_info)
-            if cross_info.last_cross_up != init_cross_info.last_cross_up:
-                LOG.info(f"Last cross up: {cross_info.last_cross_up}")
+            if cross_info.sma_last_cross_up != init_cross_info.sma_last_cross_up:
+                LOG.info(f"Last cross up: {cross_info.sma_last_cross_up}")
                 break
 
         for i in range(len(data.index) - 1, 1, -1):
             cross_info = SMACrossUtils.check_cross_down(data, i, cross_info)
-            if cross_info.last_cross_down != init_cross_info.last_cross_down:
-                LOG.info(f"Last cross down: {cross_info.last_cross_down}")
+            if cross_info.sma_last_cross_down != init_cross_info.sma_last_cross_down:
+                LOG.info(f"Last cross down: {cross_info.sma_last_cross_down}")
                 break
 
-        if str_to_dt(cross_info.last_cross_down) < str_to_dt(cross_info.last_cross_up):
-            cross_info.last_status = StockStatusController.buy
+        if str_to_dt(cross_info.sma_last_cross_down) < str_to_dt(
+            cross_info.sma_last_cross_up
+        ):
+            cross_info.sma_last_status = StockStatusController.buy
         else:
-            cross_info.last_status = StockStatusController.sell
+            cross_info.sma_last_status = StockStatusController.sell
 
         KV_HANDLER.set(ticker, cross_info.dict())
         LOG.info(
@@ -125,7 +127,7 @@ def update_redis(tickers: List, new_tickers: List) -> None:
             LOG.error(f"No Redis data for ticker {ticker}...")
             continue
 
-        cross_info = SMACrossInfo(**json.loads(cross_info))
+        cross_info = StrategyInfo(**json.loads(cross_info))
 
         cross_info = SMACrossUtils.check_cross_up(data, 0, cross_info)
         cross_info = SMACrossUtils.check_cross_down(data, 0, cross_info)

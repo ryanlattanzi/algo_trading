@@ -49,5 +49,5 @@ def orchestrate_macd_cross_dag(new_tickers: List) -> List[TradeEvent]:
 
 if __name__ == "__main__":
     new_tickers = orchestrate_data_pull_dag()
-    sma_events = orchestrate_sma_cross_dag(new_tickers)
+    # sma_events = orchestrate_sma_cross_dag(new_tickers)
     macd_events = orchestrate_macd_cross_dag(new_tickers)

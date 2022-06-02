@@ -8,7 +8,7 @@ from algo_trading.config.events import TradeEvent
 from algo_trading.config.controllers import (
     ColumnController,
     StockStatusController,
-    SMACrossInfo,
+    StrategyInfo,
 )
 from algo_trading.repositories.db_repository import AbstractDBRepository
 from algo_trading.repositories.key_val_repository import AbstractKeyValueRepository
@@ -20,8 +20,8 @@ class SMACrossUtils:
     def check_cross_up(
         data: pd.DataFrame,
         index: int,
-        cross_info: SMACrossInfo,
-    ) -> SMACrossInfo:
+        cross_info: StrategyInfo,
+    ) -> StrategyInfo:
         """
         Checks to see if a cross up occured by looking at
         the current date 7 and 21 day SMA and the previous date
@@ -35,10 +35,10 @@ class SMACrossUtils:
         Args:
             data (pd.DataFrame): Data to parse SMA info.
             index (int): Indicates current day. index + 1 = prev day.
-            cross_info (SMACrossInfo): Current cross info to analyze.
+            cross_info (StrategyInfo): Current cross info to analyze.
 
         Returns:
-            SMACrossInfo: Updated (or not) SMACrossInfo object.
+            StrategyInfo: Updated (or not) StrategyInfo object.
         """
         if (
             (
@@ -54,7 +54,7 @@ class SMACrossUtils:
                 > data[ColumnController.ma_50.value].iloc[index]
             )
         ):
-            cross_info.last_cross_up = dt_to_str(
+            cross_info.sma_last_cross_up = dt_to_str(
                 data[ColumnController.date.value].iloc[index]
             )
 
@@ -64,8 +64,8 @@ class SMACrossUtils:
     def check_cross_down(
         data: pd.DataFrame,
         index: int,
-        cross_info: SMACrossInfo,
-    ) -> SMACrossInfo:
+        cross_info: StrategyInfo,
+    ) -> StrategyInfo:
         """
         Checks to see if a cross down occured by looking at
         the current date 7 and 21 day SMA and the previous date
@@ -83,10 +83,10 @@ class SMACrossUtils:
         Args:
             data (pd.DataFrame): Data to parse SMA info.
             index (int): Indicates current day. index + 1 = prev day.
-            cross_info (SMACrossInfo): Cross info to update.
+            cross_info (StrategyInfo): Cross info to update.
 
         Returns:
-            SMACrossInfo: Updated SMACross info object.
+            StrategyInfo: Updated SMACross info object.
         """
         if (
             (
@@ -98,11 +98,11 @@ class SMACrossUtils:
                 >= data[ColumnController.ma_21.value].iloc[index - 1]
             )
             and (
-                str_to_dt(cross_info.last_cross_down)
-                < str_to_dt(cross_info.last_cross_up)
+                str_to_dt(cross_info.sma_last_cross_down)
+                < str_to_dt(cross_info.sma_last_cross_up)
             )
         ):
-            cross_info.last_cross_down = dt_to_str(
+            cross_info.sma_last_cross_down = dt_to_str(
                 data[ColumnController.date.value].iloc[index]
             )
 
@@ -122,11 +122,11 @@ class SMACross(AbstractStrategy):
         self.date = date
 
     @property
-    def cross_info(self) -> SMACrossInfo:
+    def cross_info(self) -> StrategyInfo:
         try:
             return self._cross_info
         except AttributeError:
-            self._cross_info = SMACrossInfo(
+            self._cross_info = StrategyInfo(
                 **json.loads(self.cross_db.get(self.ticker))
             )
             return self._cross_info
@@ -139,7 +139,7 @@ class SMACross(AbstractStrategy):
             signal (StockStatusController): Enumeration signal.
         """
         current = self.cross_info
-        current.last_status = signal
+        current.sma_last_status = signal
         self.cross_db.set(self.ticker, current.dict())
 
     def run(self) -> TradeEvent:
@@ -149,9 +149,9 @@ class SMACross(AbstractStrategy):
         Returns:
             TradeEvent: Event
         """
-        last_cross_up = str_to_dt(self.cross_info.last_cross_up)
-        last_cross_down = str_to_dt(self.cross_info.last_cross_down)
-        last_status = self.cross_info.last_status
+        last_cross_up = str_to_dt(self.cross_info.sma_last_cross_up)
+        last_cross_down = str_to_dt(self.cross_info.sma_last_cross_down)
+        last_status = self.cross_info.sma_last_status
 
         if last_cross_up > last_cross_down:
             if last_status == StockStatusController.buy:
