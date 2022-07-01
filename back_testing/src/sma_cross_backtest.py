@@ -16,7 +16,7 @@ from algo_trading.config.controllers import (
     DBHandlerController,
     KeyValueController,
     StockStatusController,
-    SMACrossInfo,
+    StrategyInfo,
 )
 from algo_trading.utils.calculations import Calculator
 from algo_trading.exceptions.data_exceptions import DateNotFoundException
@@ -156,10 +156,10 @@ class SMACrossBackTester:
             )
             last_status = StockStatusController.sell
 
-        cross_info = SMACrossInfo(
-            last_cross_up=last_cross_up,
-            last_cross_down=last_cross_down,
-            last_status=last_status,
+        cross_info = StrategyInfo(
+            sma_last_cross_up=last_cross_up,
+            sma_last_cross_down=last_cross_down,
+            sma_last_status=last_status,
         )
 
         return last_status, {self.ticker: json.dumps(cross_info.dict())}
@@ -252,7 +252,7 @@ class SMACrossBackTester:
             else:
 
                 # Current key/val store for self.ticker
-                cross_info = SMACrossInfo(**json.loads(fake_kv_repo.get(self.ticker)))
+                cross_info = StrategyInfo(**json.loads(fake_kv_repo.get(self.ticker)))
 
                 cross_info = SMACrossUtils.check_cross_up(
                     self.price_data[: (idx + 1)],

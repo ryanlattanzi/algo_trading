@@ -69,13 +69,17 @@ def backfill_redis(new_tickers: List[str]) -> None:
         data = DB_HANDLER.get_all(ticker)
         data = Calculator.calculate_sma(data, ColumnController.close.value)
 
+        # if KV_HANDLER.get(ticker) is not None:
+        #     LOG.info(f"Redis data for {ticker} already exists bum!")
+        #     continue
+
         if KV_HANDLER.get(ticker) is not None:
-            LOG.info(f"Redis data for {ticker} already exists bum!")
-            continue
+            init_cross_info = KV_HANDLER.get(ticker)
+        else:
+            init_cross_info = StrategyInfo()
 
         LOG.info(f"Backfilling cross up/down info for {ticker}")
 
-        init_cross_info = StrategyInfo()
         cross_info = copy.deepcopy(init_cross_info)
 
         # TODO: Dirty way of finding out last cross up and cross down - can def do better

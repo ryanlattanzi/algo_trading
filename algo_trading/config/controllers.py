@@ -16,9 +16,10 @@ class ColumnController(Enum):
     ma_50 = "ma_50"
     ma_21 = "ma_21"
     ma_7 = "ma_7"
-    ema_9 = "ema_9"
     ema_12 = "ema_12"
     ema_26 = "ema_26"
+    macd_line = "macd_line"
+    signal_line = "signal_line"
 
     @classmethod
     def df_columns(cls) -> List[str]:
@@ -54,12 +55,15 @@ class ColumnController(Enum):
         }
 
     @classmethod
-    def macd_calculations(cls) -> Dict:
+    def ema_calculations(cls) -> Dict:
         return {
-            cls.ema_9.value: 9,
-            cls.ema_12.value: 12,
             cls.ema_26.value: 26,
+            cls.ema_12.value: 12,
         }
+
+    @classmethod
+    def macd_calculations(cls) -> Dict:
+        return {cls.signal_line.value: 9}
 
 
 class StockStatusController(str, Enum):
@@ -110,20 +114,6 @@ class Config(BaseModel):
     data_repo: str
     kv_repo: str
     obj_store_repo: str
-
-
-class SMACrossInfo(BaseModel):
-
-    last_cross_up: str = "1900-01-01"
-    last_cross_down: str = "1900-01-02"
-    last_status: StockStatusController = StockStatusController.sell
-
-
-class MACDCrossInfo(BaseModel):
-
-    last_cross_up: str = "1900-01-01"
-    last_cross_down: str = "1900-01-02"
-    last_status: StockStatusController = StockStatusController.sell
 
 
 class StrategyInfo(BaseModel):

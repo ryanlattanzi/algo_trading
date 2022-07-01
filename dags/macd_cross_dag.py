@@ -67,15 +67,24 @@ def backfill_redis(new_tickers: List[str]) -> None:
 
     for ticker in new_tickers:
         data = DB_HANDLER.get_all(ticker)
-        data = Calculator.calculate_ema(data, ColumnController.close.value)
+        data = Calculator.calculate_ema(
+            data, ColumnController.close.value, ColumnController.ema_calculations()
+        )
+        data = Calculator.calculate_macd_signal(
+            data, ColumnController.ema_12.value, ColumnController.ema_26.value
+        )
+
+        # if KV_HANDLER.get(ticker) is not None:
+        #     LOG.info(f"Redis data for {ticker} already exists bum!")
+        #     continue
 
         if KV_HANDLER.get(ticker) is not None:
-            LOG.info(f"Redis data for {ticker} already exists bum!")
-            continue
+            init_cross_info = StrategyInfo(**json.loads(KV_HANDLER.get(ticker)))
+        else:
+            init_cross_info = StrategyInfo()
 
         LOG.info(f"Backfilling cross up/down info for {ticker}")
 
-        init_cross_info = StrategyInfo()
         cross_info = copy.deepcopy(init_cross_info)
 
         # TODO: Dirty way of finding out last cross up and cross down - can def do better
@@ -118,8 +127,10 @@ def update_redis(tickers: List, new_tickers: List) -> None:
     """
 
     for ticker in [t for t in tickers if t not in new_tickers]:
-        data = DB_HANDLER.get_days_back(ticker, 201)
-        data = Calculator.calculate_ema(data, ColumnController.close.value)
+        data = DB_HANDLER.get_days_back(ticker, 27)
+        data = Calculator.calculate_ema(
+            data, ColumnController.close.value, ColumnController.ema_calculations()
+        )
 
         cross_info = KV_HANDLER.get(ticker)
 

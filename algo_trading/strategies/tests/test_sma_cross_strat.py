@@ -5,7 +5,7 @@ import pandas as pd
 from algo_trading.config.controllers import (
     ColumnController,
     KeyValueController,
-    SMACrossInfo,
+    StrategyInfo,
     StockStatusController,
 )
 from algo_trading.config.events import TradeEvent
@@ -37,24 +37,24 @@ class TestCheckCrossUp:
         From 2005-01-06 to 2005-01-07, index 4,
         we should have a cross up.
         """
-        cross_info: SMACrossInfo = SMACrossUtils.check_cross_up(
+        cross_info: StrategyInfo = SMACrossUtils.check_cross_up(
             DATA,
             4,
-            SMACrossInfo(),
+            StrategyInfo(),
         )
-        assert cross_info.last_cross_up == "2005-01-07"
+        assert cross_info.sma_last_cross_up == "2005-01-07"
 
     def test_no_cross_up(self):
         """
         Should be no cross up so last_cross_up stays the same
         as default values.
         """
-        cross_info: SMACrossInfo = SMACrossUtils.check_cross_up(
+        cross_info: StrategyInfo = SMACrossUtils.check_cross_up(
             DATA,
             5,
-            SMACrossInfo(),
+            StrategyInfo(),
         )
-        assert cross_info.last_cross_up == "1900-01-01"
+        assert cross_info.sma_last_cross_up == "1900-01-01"
 
     def test_cross_up_bear_market(self):
         """
@@ -64,12 +64,12 @@ class TestCheckCrossUp:
         day moving average a.k.a. a bear market. Hence, the
         last_cross_up value should not change and match the default.
         """
-        cross_info: SMACrossInfo = SMACrossUtils.check_cross_up(
+        cross_info: StrategyInfo = SMACrossUtils.check_cross_up(
             DATA,
             2,
-            SMACrossInfo(),
+            StrategyInfo(),
         )
-        assert cross_info.last_cross_up == "1900-01-01"
+        assert cross_info.sma_last_cross_up == "1900-01-01"
 
 
 class TestCheckCrossDown:
@@ -83,28 +83,28 @@ class TestCheckCrossDown:
         From 2005-01-03 to 2005-01-04, index 1,
         we should have a cross down.
         """
-        init_cross_info = SMACrossInfo(
-            last_cross_down="1899-12-31",
-            last_status=StockStatusController.buy,
+        init_cross_info = StrategyInfo(
+            sma_last_cross_down="1899-12-31",
+            sma_last_status=StockStatusController.buy,
         )
-        cross_info: SMACrossInfo = SMACrossUtils.check_cross_down(
+        cross_info: StrategyInfo = SMACrossUtils.check_cross_down(
             DATA,
             1,
             init_cross_info,
         )
-        assert cross_info.last_cross_down == "2005-01-04"
+        assert cross_info.sma_last_cross_down == "2005-01-04"
 
     def test_no_cross_down(self):
         """
         Should be no cross down so last_cross_down stays the same
         as default values.
         """
-        cross_info: SMACrossInfo = SMACrossUtils.check_cross_up(
+        cross_info: StrategyInfo = SMACrossUtils.check_cross_up(
             DATA,
             5,
-            SMACrossInfo(),
+            StrategyInfo(),
         )
-        assert cross_info.last_cross_down == "1900-01-02"
+        assert cross_info.sma_last_cross_down == "1900-01-02"
 
     def test_cross_down_bear_market(self):
         """
@@ -113,17 +113,17 @@ class TestCheckCrossDown:
         We don't want to register a cross down in
         a bear market either.
         """
-        cross_info: SMACrossInfo = SMACrossUtils.check_cross_up(
+        cross_info: StrategyInfo = SMACrossUtils.check_cross_up(
             DATA,
             1,
-            SMACrossInfo(),
+            StrategyInfo(),
         )
-        assert cross_info.last_cross_down == "1900-01-02"
+        assert cross_info.sma_last_cross_down == "1900-01-02"
 
 
 class TestSMACross:
     """
-    Tests updating signals according to SMACrossInfo
+    Tests updating signals according to StrategyInfo
     data.
     """
 
@@ -142,16 +142,16 @@ class TestSMACross:
 
     def test_sell_signal(self):
         """
-        We should see a sell signal based off SMACrossInfo values.
+        We should see a sell signal based off StrategyInfo values.
         Simulates having registered a cross_down recently (using the
         SMAUtils functions above), so we need to update the kv_repo
         to a sell signal and return the TradeEvent.
         """
 
-        init_cross_info = SMACrossInfo(
-            last_cross_up="1900-01-01",
-            last_cross_down="1900-01-02",
-            last_status=StockStatusController.buy,
+        init_cross_info = StrategyInfo(
+            sma_last_cross_up="1900-01-01",
+            sma_last_cross_down="1900-01-02",
+            sma_last_status=StockStatusController.buy,
         )
         init_kv = {self.TICKER: json.dumps(init_cross_info.dict())}
         fake_kv_repo = KeyValueRepository(
@@ -169,12 +169,12 @@ class TestSMACross:
             signal=StockStatusController.sell,
         )
 
-        assert SMACrossInfo(
+        assert StrategyInfo(
             **json.loads(fake_kv_repo.get(self.TICKER))
-        ) == SMACrossInfo(
-            last_cross_up="1900-01-01",
-            last_cross_down="1900-01-02",
-            last_status=StockStatusController.sell,
+        ) == StrategyInfo(
+            sma_last_cross_up="1900-01-01",
+            sma_last_cross_down="1900-01-02",
+            sma_last_status=StockStatusController.sell,
         )
 
     def test_buy_signal(self):
@@ -184,10 +184,10 @@ class TestSMACross:
         return the appropriate TradeEvent.
         """
 
-        init_cross_info = SMACrossInfo(
-            last_cross_up="1900-01-01",
-            last_cross_down="1899-12-31",
-            last_status=StockStatusController.sell,
+        init_cross_info = StrategyInfo(
+            sma_last_cross_up="1900-01-01",
+            sma_last_cross_down="1899-12-31",
+            sma_last_status=StockStatusController.sell,
         )
         init_kv = {self.TICKER: json.dumps(init_cross_info.dict())}
         fake_kv_repo = KeyValueRepository(
@@ -205,12 +205,12 @@ class TestSMACross:
             signal=StockStatusController.buy,
         )
 
-        assert SMACrossInfo(
+        assert StrategyInfo(
             **json.loads(fake_kv_repo.get(self.TICKER))
-        ) == SMACrossInfo(
-            last_cross_up="1900-01-01",
-            last_cross_down="1899-12-31",
-            last_status=StockStatusController.buy,
+        ) == StrategyInfo(
+            sma_last_cross_up="1900-01-01",
+            sma_last_cross_down="1899-12-31",
+            sma_last_status=StockStatusController.buy,
         )
 
     def test_wait_signal(self):
@@ -220,10 +220,10 @@ class TestSMACross:
         means we want to wait until we find a cross up to buy.
         """
 
-        init_cross_info = SMACrossInfo(
-            last_cross_up="1900-01-01",
-            last_cross_down="1900-01-02",
-            last_status=StockStatusController.sell,
+        init_cross_info = StrategyInfo(
+            sma_last_cross_up="1900-01-01",
+            sma_last_cross_down="1900-01-02",
+            sma_last_status=StockStatusController.sell,
         )
         init_kv = {self.TICKER: json.dumps(init_cross_info.dict())}
         fake_kv_repo = KeyValueRepository(
@@ -242,7 +242,7 @@ class TestSMACross:
         )
 
         assert (
-            SMACrossInfo(**json.loads(fake_kv_repo.get(self.TICKER))) == init_cross_info
+            StrategyInfo(**json.loads(fake_kv_repo.get(self.TICKER))) == init_cross_info
         )
 
     def test_hold_signal(self):
@@ -253,10 +253,10 @@ class TestSMACross:
         down to sell.
         """
 
-        init_cross_info = SMACrossInfo(
-            last_cross_up="1900-01-01",
-            last_cross_down="1899-12-31",
-            last_status=StockStatusController.buy,
+        init_cross_info = StrategyInfo(
+            sma_last_cross_up="1900-01-01",
+            sma_last_cross_down="1899-12-31",
+            sma_last_status=StockStatusController.buy,
         )
         init_kv = {self.TICKER: json.dumps(init_cross_info.dict())}
         fake_kv_repo = KeyValueRepository(
@@ -275,5 +275,5 @@ class TestSMACross:
         )
 
         assert (
-            SMACrossInfo(**json.loads(fake_kv_repo.get(self.TICKER))) == init_cross_info
+            StrategyInfo(**json.loads(fake_kv_repo.get(self.TICKER))) == init_cross_info
         )

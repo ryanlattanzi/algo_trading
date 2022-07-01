@@ -17,41 +17,6 @@ from algo_trading.utils.utils import dt_to_str, str_to_dt
 
 class MACDCrossUtils:
     @staticmethod
-    def _calc_macd_signal(
-        data: pd.DataFrame,
-        index: int,
-    ) -> tuple:
-        """
-        This function will calculate the MACD line based on the 26EMA - 12EMA and subtract it from the 9EMA to find the
-        convergence/divergence value for both the current and previous day. Signal Line is the 9EMA.
-
-        Args:
-            data (pd.DataFrame): Data to parse EMA info.
-            index (int): Indicates current day. Index - 1 is previous day
-        Returns:
-            tuple: Provides the current day and previous day, respectively, MACD convergence/divergence value (macd_cdv).
-        """
-        # Calculates the MACD signal value of the current day and previous day
-        macd_signal_curr = (
-            data[ColumnController.ema_26.value].iloc[index]
-            - data[ColumnController.ema_12.value].iloc[index]
-        )
-        macd_signal_prev = (
-            data[ColumnController.ema_26.value].iloc[index - 1]
-            - data[ColumnController.ema_12.value].iloc[index - 1]
-        )
-
-        # Calculates the convergence/divergence value for the current and previous day
-        macd_cdv_curr = (
-            macd_signal_curr - data[ColumnController.ema_9.value].iloc[index]
-        )
-        macd_cdv_prev = (
-            macd_signal_prev - data[ColumnController.ema_9.value].iloc[index - 1]
-        )
-
-        return macd_cdv_curr, macd_cdv_prev
-
-    @staticmethod
     def check_cross_up(
         data: pd.DataFrame,
         index: int,
@@ -68,15 +33,19 @@ class MACDCrossUtils:
         Returns:
             StrategyInfo: Returns the date of when a cross up occured.
         """
-
-        macd_cdv_curr, macd_cdv_prev = MACDCrossUtils._calc_macd_signal(data, index)
-
+        macd_curr = (
+            data[ColumnController.macd_line.value].iloc[index]
+            - data[ColumnController.signal_line.value].iloc[index]
+        )
+        macd_prev = (
+            data[ColumnController.macd_line.value].iloc[index - 1]
+            - data[ColumnController.signal_line.value].iloc[index - 1]
+        )
         # Checks to see if the cdv on the current day is greater than 0 (meaning that MACD line is greater than Signal)
-        if macd_cdv_curr > 0 and macd_cdv_prev <= 0:
+        if macd_curr > 0 and macd_prev <= 0:
             cross_info.macd_last_cross_up = dt_to_str(
                 data[ColumnController.date.value].iloc[index]
             )
-
         return cross_info
 
     @staticmethod
@@ -97,10 +66,17 @@ class MACDCrossUtils:
             StrategyInfo: Returns the updated cross info to Redis with the new cross down event.
         """
 
-        macd_cdv_curr, macd_cdv_prev = MACDCrossUtils._calc_macd_signal(data, index)
+        macd_curr = (
+            data[ColumnController.macd_line.value].iloc[index]
+            - data[ColumnController.signal_line.value].iloc[index]
+        )
+        macd_prev = (
+            data[ColumnController.macd_line.value].iloc[index - 1]
+            - data[ColumnController.signal_line.value].iloc[index - 1]
+        )
 
         # This Means that the MACD line goes below the Signal Line
-        if macd_cdv_curr < 0 and macd_cdv_prev >= 0:
+        if macd_curr < 0 and macd_prev >= 0:
             cross_info.macd_last_cross_down = dt_to_str(
                 data[ColumnController.date.value].iloc[index]
             )
@@ -127,15 +103,6 @@ class MACDCross(AbstractStrategy):
             self._cross_info = StrategyInfo(**json.loads(self.macd_db.get(self.ticker)))
             return self._cross_info
 
-    @property
-    def macd_info(self) -> Dict:
-        data = self.macd_db.get_days_back(self.ticker, 1)
-        try:
-            data = data.to_dict("records")[0]
-        except IndexError:
-            data = {ColumnController.date.value: None}
-        return data
-
     def _update_last_status(self, signal: StockStatusController) -> None:
         """Updates the last_status value to the given signal for the
         Key Value store.
@@ -157,6 +124,8 @@ class MACDCross(AbstractStrategy):
         last_cross_up = str_to_dt(self.cross_info.macd_last_cross_up)
         last_cross_down = str_to_dt(self.cross_info.macd_last_cross_down)
         last_status = self.cross_info.macd_last_status
+
+        print("Running...")
 
         # Added this to trouble shoot the macd_info function
 

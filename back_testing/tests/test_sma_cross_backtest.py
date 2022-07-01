@@ -5,7 +5,7 @@ import numpy as np
 from algo_trading.config.controllers import (
     ColumnController,
     DBHandlerController,
-    SMACrossInfo,
+    StrategyInfo,
     StockStatusController,
 )
 from algo_trading.logger.default_logger import get_main_logger
@@ -160,10 +160,10 @@ class TestSMACrossBackTester:
         assert last_status == StockStatusController.sell
         assert cross_info == {
             self.ticker: json.dumps(
-                SMACrossInfo(
-                    last_cross_up="2010-11-17",
-                    last_cross_down="2010-11-18",
-                    last_status=StockStatusController.sell,
+                StrategyInfo(
+                    sma_last_cross_up="2010-11-17",
+                    sma_last_cross_down="2010-11-18",
+                    sma_last_status=StockStatusController.sell,
                 ).dict()
             )
         }
@@ -193,10 +193,10 @@ class TestSMACrossBackTester:
         assert last_status == StockStatusController.buy
         assert cross_info == {
             self.ticker: json.dumps(
-                SMACrossInfo(
-                    last_cross_up="2010-10-17",
-                    last_cross_down="2010-10-16",
-                    last_status=StockStatusController.buy,
+                StrategyInfo(
+                    sma_last_cross_up="2010-10-17",
+                    sma_last_cross_down="2010-10-16",
+                    sma_last_status=StockStatusController.buy,
                 ).dict()
             )
         }
@@ -213,10 +213,10 @@ class TestSMACrossBackTester:
         assert last_status == StockStatusController.sell
         assert cross_info == {
             self.ticker: json.dumps(
-                SMACrossInfo(
-                    last_cross_up="2003-12-31",
-                    last_cross_down="2004-01-01",
-                    last_status=StockStatusController.sell,
+                StrategyInfo(
+                    sma_last_cross_up="2003-12-31",
+                    sma_last_cross_down="2004-01-01",
+                    sma_last_status=StockStatusController.sell,
                 ).dict()
             )
         }

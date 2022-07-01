@@ -34,7 +34,7 @@ class SMACrossUtils:
 
         Args:
             data (pd.DataFrame): Data to parse SMA info.
-            index (int): Indicates current day. index + 1 = prev day.
+            index (int): Indicates current day. index - 1 = prev day.
             cross_info (StrategyInfo): Current cross info to analyze.
 
         Returns:
