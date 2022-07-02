@@ -44,7 +44,7 @@ Finally, you must create a `logs` folder under the directory `dags` and another 
 
 For now, there are 2 entrypoints into the system: `dags/orchestrate.py` which runs all of the DAGs in succession, and `back_testing/sma_cross_backtest.py`. The directory `algo_trading` includes all the source code that both entrypoints make use of. Within `back_testing/config`, `dags/config`, and `email_service/src`, you will find configuration values to bootstrap the entrypoints with which tickers to analyze, which database backend to use, etc.
 
-For now, the best way to execute the program is `make test` for dev purposes. It will run `orchestrate.py` to populate the database, `sma_cross_backtest.py` to backtest a given ticker over time, and `./bin/test_notification.sh` to send a few curl commands to the notification service. More specific unit tests are on the agenda...
+For now, the best way to execute the program is `make test-integration` for dev purposes. It will run `orchestrate.py` to populate the database, `sma_cross_backtest.py` to backtest a given ticker over time, and `./bin/test_notification.sh` to send a few curl commands to the notification service. More specific unit tests are on the agenda...
 
 Importantly, in order to ensure that the microservices are using the most up-to-date code in `algo_trading`, you should run `make dist`, which will generate a whl file in `./dist` and reference that file in each of the Dockerfiles. We aren't worried too much about package versions for now...but that's on the list. (If you desire to change the package version, just peep `setup.py` in the root dir.)
 
