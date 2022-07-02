@@ -4,3 +4,6 @@ kv_repo: redis
 obj_store_repo: minio
 ticker_list:
   - nio
+  - tsla
+  - aapl
+  - msft

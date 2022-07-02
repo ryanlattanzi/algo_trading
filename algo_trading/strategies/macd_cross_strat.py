@@ -125,10 +125,6 @@ class MACDCross(AbstractStrategy):
         last_cross_down = str_to_dt(self.cross_info.macd_last_cross_down)
         last_status = self.cross_info.macd_last_status
 
-        print("Running...")
-
-        # Added this to trouble shoot the macd_info function
-
         if last_cross_up > last_cross_down:
             if last_status == StockStatusController.buy:
                 signal = StockStatusController.hold
