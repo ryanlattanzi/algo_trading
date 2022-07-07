@@ -5,6 +5,7 @@ from algo_trading.config.events import TradeEvent
 from config import CONFIG, DATA_BUCKET, LOG_BUCKET
 import data_pull_dag
 import sma_cross_dag
+import macd_cross_dag
 
 
 def orchestrate_data_pull_dag() -> List[str]:
@@ -37,6 +38,16 @@ def orchestrate_sma_cross_dag(new_tickers: List) -> List[TradeEvent]:
     return events
 
 
+def orchestrate_macd_cross_dag(new_tickers: List) -> List[TradeEvent]:
+    macd_cross_dag.backfill_redis(new_tickers)
+    macd_cross_dag.update_redis(CONFIG.ticker_list, new_tickers)
+    events = macd_cross_dag.run_macd(CONFIG.ticker_list)
+    macd_cross_dag.finish_log()
+    macd_cross_dag.persist_log()
+    return events
+
+
 if __name__ == "__main__":
     new_tickers = orchestrate_data_pull_dag()
-    events = orchestrate_sma_cross_dag(new_tickers)
+    sma_events = orchestrate_sma_cross_dag(new_tickers)
+    macd_events = orchestrate_macd_cross_dag(new_tickers)

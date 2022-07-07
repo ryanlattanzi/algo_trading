@@ -6,7 +6,7 @@ import copy
 
 from algo_trading.logger.default_logger import get_main_logger
 from algo_trading.logger.controllers import LogLevelController
-from algo_trading.strategies.sma_cross_strat import SMACross, SMACrossUtils
+from algo_trading.strategies.macd_cross_strat import MACDCross, MACDCrossUtils
 from algo_trading.repositories.db_repository import DBRepository
 from algo_trading.repositories.key_val_repository import KeyValueRepository
 from algo_trading.repositories.obj_store_repository import ObjStoreRepository
@@ -33,8 +33,8 @@ from config import (
 
 
 LOG, LOG_INFO = get_main_logger(
-    log_name="sma_cross_dag",
-    file_name=os.path.join("logs", f"sma_cross_dag_{dt_to_str(datetime.today())}.log"),
+    log_name="macd_cross_dag",
+    file_name=os.path.join("logs", f"macd_cross_dag_{dt_to_str(datetime.today())}.log"),
     log_level=LogLevelController.info,
 )
 
@@ -67,14 +67,19 @@ def backfill_redis(new_tickers: List[str]) -> None:
 
     for ticker in new_tickers:
         data = DB_HANDLER.get_all(ticker)
-        data = Calculator.calculate_sma(data, ColumnController.close.value)
+        data = Calculator.calculate_ema(
+            data, ColumnController.close.value, ColumnController.ema_calculations()
+        )
+        data = Calculator.calculate_macd_signal(
+            data, ColumnController.ema_12.value, ColumnController.ema_26.value
+        )
 
         # if KV_HANDLER.get(ticker) is not None:
         #     LOG.info(f"Redis data for {ticker} already exists bum!")
         #     continue
 
         if KV_HANDLER.get(ticker) is not None:
-            init_cross_info = KV_HANDLER.get(ticker)
+            init_cross_info = StrategyInfo(**json.loads(KV_HANDLER.get(ticker)))
         else:
             init_cross_info = StrategyInfo()
 
@@ -84,23 +89,23 @@ def backfill_redis(new_tickers: List[str]) -> None:
 
         # TODO: Dirty way of finding out last cross up and cross down - can def do better
         for i in range(len(data.index) - 1, 1, -1):
-            cross_info = SMACrossUtils.check_cross_up(data, i, cross_info)
-            if cross_info.sma_last_cross_up != init_cross_info.sma_last_cross_up:
-                LOG.info(f"Last cross up: {cross_info.sma_last_cross_up}")
+            cross_info = MACDCrossUtils.check_cross_up(data, i, cross_info)
+            if cross_info.macd_last_cross_up != init_cross_info.macd_last_cross_up:
+                LOG.info(f"Last cross up: {cross_info.macd_last_cross_up}")
                 break
 
         for i in range(len(data.index) - 1, 1, -1):
-            cross_info = SMACrossUtils.check_cross_down(data, i, cross_info)
-            if cross_info.sma_last_cross_down != init_cross_info.sma_last_cross_down:
-                LOG.info(f"Last cross down: {cross_info.sma_last_cross_down}")
+            cross_info = MACDCrossUtils.check_cross_down(data, i, cross_info)
+            if cross_info.macd_last_cross_down != init_cross_info.macd_last_cross_down:
+                LOG.info(f"Last cross down: {cross_info.macd_last_cross_down}")
                 break
 
-        if str_to_dt(cross_info.sma_last_cross_down) < str_to_dt(
-            cross_info.sma_last_cross_up
+        if str_to_dt(cross_info.macd_last_cross_down) < str_to_dt(
+            cross_info.macd_last_cross_up
         ):
-            cross_info.sma_last_status = StockStatusController.buy
+            cross_info.macd_last_status = StockStatusController.buy
         else:
-            cross_info.sma_last_status = StockStatusController.sell
+            cross_info.macd_last_status = StockStatusController.sell
 
         KV_HANDLER.set(ticker, cross_info.dict())
         LOG.info(
@@ -122,8 +127,10 @@ def update_redis(tickers: List, new_tickers: List) -> None:
     """
 
     for ticker in [t for t in tickers if t not in new_tickers]:
-        data = DB_HANDLER.get_days_back(ticker, 201)
-        data = Calculator.calculate_sma(data, ColumnController.close.value)
+        data = DB_HANDLER.get_days_back(ticker, 27)
+        data = Calculator.calculate_ema(
+            data, ColumnController.close.value, ColumnController.ema_calculations()
+        )
 
         cross_info = KV_HANDLER.get(ticker)
 
@@ -133,8 +140,8 @@ def update_redis(tickers: List, new_tickers: List) -> None:
 
         cross_info = StrategyInfo(**json.loads(cross_info))
 
-        cross_info = SMACrossUtils.check_cross_up(data, 0, cross_info)
-        cross_info = SMACrossUtils.check_cross_down(data, 0, cross_info)
+        cross_info = MACDCrossUtils.check_cross_up(data, 0, cross_info)
+        cross_info = MACDCrossUtils.check_cross_down(data, 0, cross_info)
 
         KV_HANDLER.set(ticker, cross_info.dict())
         LOG.info(
@@ -142,11 +149,11 @@ def update_redis(tickers: List, new_tickers: List) -> None:
         )
 
 
-def run_sma(tickers: List) -> List[TradeEvent]:
-    """Runs the SMA strategy for the given tickers.
+def run_macd(tickers: List) -> List[TradeEvent]:
+    """Runs the MACD strategy for the given tickers.
 
     Args:
-        tickers (List): Tickers to analyze with SMA.
+        tickers (List): Tickers to analyze with MACD.
 
     Returns:
         List[TradeEvent]: TradeEvents based off of algorithm.
@@ -156,8 +163,8 @@ def run_sma(tickers: List) -> List[TradeEvent]:
         date = DB_HANDLER.get_days_back(ticker, 1).to_dict("records")[0][
             ColumnController.date.value
         ]
-        sma = SMACross(ticker, KV_HANDLER, date)
-        result = sma.run()
+        macd = MACDCross(ticker, KV_HANDLER, date)
+        result = macd.run()
         if result.signal in [StockStatusController.buy, StockStatusController.sell]:
             events.append(result)
         LOG.info(f"{ticker.upper()} {result.signal.value} Event on {result.date}")
@@ -165,7 +172,7 @@ def run_sma(tickers: List) -> List[TradeEvent]:
 
 
 def finish_log() -> None:
-    LOG.info(f"END OF SMA CROSS DAG ON {dt_to_str(datetime.today())}.\n")
+    LOG.info(f"END OF MACD CROSS DAG ON {dt_to_str(datetime.today())}.\n")
 
 
 def persist_log() -> None:
