@@ -1,5 +1,4 @@
 import os
-from io import StringIO
 from datetime import datetime, timedelta
 from typing import Dict, List
 import pandas as pd
@@ -21,8 +20,6 @@ from config import (
     DATE_FORMAT,
     OBJ_STORE_INFO,
     CONFIG,
-    DATA_BUCKET,
-    DATA_KEY,
     LOG_BUCKET,
     LOG_KEY,
 )
@@ -106,41 +103,15 @@ def get_new_ticker_data(
     return new_ticker_data
 
 
-def persist_ticker_data(
-    ticker_data: Dict[str, pd.DataFrame]
-) -> Dict[str, Dict[str, str]]:
+def persist_ticker_data(ticker_data: Dict[str, pd.DataFrame]) -> None:
     """
-    Slaps the historical data from pd.DataFrame into the DB and Object
-    Store.
+    Slaps the historical data from pd.DataFrame into the DB.
 
     Args:
         ticker_data (Dict): Data to be loaded to the DB
-
-    Returns:
-        Dict: Mapping tickers to bucket and key.
     """
-
-    paths = dict()
     for ticker, df in ticker_data.items():
-        # Persisting data to object storage.
-        csv_buffer = StringIO()
-        df.to_csv(csv_buffer, index=False)
-        bucket = DATA_BUCKET
-        key = DATA_KEY.format(ticker=ticker, run_date=dt_to_str(datetime.today()))
-        OBJ_STORE_HANDLER.put_object(
-            file_body=csv_buffer.getvalue(),
-            bucket=bucket,
-            key=key,
-        )
-        paths[ticker] = {
-            "bucket": bucket,
-            "key": key,
-        }
-
-        # Saving data to the database.
         DB_HANDLER.append_df_to_sql(ticker, df)
-
-    return paths
 
 
 def get_existing_ticker_data(
