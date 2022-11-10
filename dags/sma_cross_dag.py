@@ -59,7 +59,7 @@ OBJ_STORE_HANDLER = ObjStoreRepository(
 
 def backfill_redis(new_tickers: List[str]) -> None:
     """Gets up to date redis data for new tickers to indicate last
-    cross dates and status.
+    cross dates and statuses.
 
     Args:
         new_tickers (List[str]): New tickers to backfill.
